@@ -98,11 +98,11 @@ services:
     profiles:
       - gpu  # 仅当指定 --profile gpu 时启动
 
-  ocr-cpu:
+  ocr:
     build:
       context: ./ml_service
       dockerfile: Dockerfile.cpu
-    container_name: math3d-ocr-cpu
+    container_name: math3d-ocr
     ports:
       - "8001:8001"
     volumes:
