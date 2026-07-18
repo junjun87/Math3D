@@ -118,7 +118,10 @@ GET  /api/v1/lessons/{id}/download # 下载离线 HTML
 - [x] 立体几何计算内核（正方体线面角等核心题型）
 - [x] 3D 课件 HTML 模板（Three.js，离线可用）
 - [x] OCR 服务容器（PaddleOCR，含 Mock 模式）
-- [ ] LLM 题目结构化集成
-- [ ] 解析几何/代数/化学内核
-- [ ] Celery 异步任务链联调
+- [x] LLM 题目结构化集成（DeepSeek + 多学科 prompt）
+- [x] Celery 异步任务链联调（端到端验证通过）
+- [x] Phase 2: 多学科 LLM 支持（解析几何/代数/化学识别 + 通用课件渲染）
+- [ ] 解析几何内核（直线/圆/椭圆/双曲线/抛物线 + Canvas 2D）
+- [ ] 代数内核（方程/不等式/函数/数列 + sympy 分步求解）
+- [ ] 化学内核（方程式配平/物质的量/浓度 + sympy 计算）
 - [ ] PWA 完整支持
