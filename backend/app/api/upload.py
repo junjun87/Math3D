@@ -37,10 +37,30 @@ async def upload_problem_image(
     if file_size_mb > settings.MAX_UPLOAD_SIZE_MB:
         raise HTTPException(400, f"File too large: {file_size_mb:.1f}MB > {settings.MAX_UPLOAD_SIZE_MB}MB")
 
-    # 保存文件
-    ext = Path(file.filename).suffix or ".jpg"
-    filename = f"{uuid.uuid4()}{ext}"
-    filepath = os.path.join(settings.UPLOAD_DIR, filename)
+    # 统一转为 JPEG 格式保存（阿里云 OCR 不支持 HEIC 等格式）
+    try:
+        from PIL import Image
+        import io as pil_io
+        img = Image.open(pil_io.BytesIO(contents))
+        if img.mode in ("RGBA", "P", "LA"):
+            img = img.convert("RGB")
+        elif img.mode != "RGB":
+            img = img.convert("RGB")
+        # 限制 2048px
+        w, h = img.size
+        if max(w, h) > 2048:
+            ratio = 2048 / max(w, h)
+            img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+        jpg_buf = pil_io.BytesIO()
+        img.save(jpg_buf, format="JPEG", quality=85)
+        contents = jpg_buf.getvalue()
+        ext = ".jpg"
+        filename = f"{uuid.uuid4()}{ext}"
+        filepath = os.path.join(settings.UPLOAD_DIR, filename)
+    except Exception:
+        ext = Path(file.filename).suffix or ".jpg"
+        filename = f"{uuid.uuid4()}{ext}"
+        filepath = os.path.join(settings.UPLOAD_DIR, filename)
 
     async with aiofiles.open(filepath, "wb") as f:
         await f.write(contents)
