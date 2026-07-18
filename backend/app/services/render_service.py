@@ -283,6 +283,148 @@ def render_solid_geometry_lesson(kernel_result: dict) -> str:
     )
 
 
+GENERIC_LESSON_TEMPLATE = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Math3D — {{ subject_name }} 课件</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #f5f5f5; min-height: 100vh; }
+  .container { max-width: 720px; margin: 0 auto; padding: 24px 16px; }
+  .header { text-align: center; padding: 32px 0; }
+  .header h1 { font-size: 24px; color: #1e293b; margin-bottom: 8px; }
+  .header .subject-tag { display: inline-block; padding: 4px 12px; border-radius: 20px;
+         background: #eff6ff; color: #3b82f6; font-size: 14px; }
+  .card { background: white; border-radius: 16px; padding: 20px; margin-bottom: 16px;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .card h3 { font-size: 16px; color: #3b82f6; margin-bottom: 12px; }
+  .step-item { padding: 12px 0; border-bottom: 1px solid #f1f5f9; }
+  .step-item:last-child { border-bottom: none; }
+  .step-title { font-weight: 600; color: #334155; margin-bottom: 4px; }
+  .step-desc { color: #64748b; font-size: 14px; }
+  .step-formula { background: #f8fafc; padding: 8px 12px; border-radius: 8px;
+                  margin-top: 6px; font-family: monospace; font-size: 14px;
+                  overflow-x: auto; }
+  .answer-box { text-align: center; padding: 24px; background: #eff6ff;
+                border-radius: 12px; font-size: 24px; font-weight: bold; color: #1d4ed8; }
+  .empty-state { text-align: center; padding: 48px 16px; color: #94a3b8; }
+  .empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+  .description-box { background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px;
+                     padding: 16px; margin-bottom: 16px; color: #92400e; font-size: 15px; }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>{{ subject_name }} 课件</h1>
+    <span class="subject-tag">{{ subject_name }}</span>
+  </div>
+
+  <div class="description-box" id="description"></div>
+
+  <div class="card">
+    <h3>📝 解题分步</h3>
+    <div id="steps-container"></div>
+  </div>
+
+  <div class="card">
+    <h3>✅ 答案</h3>
+    <div class="answer-box" id="answer-box"></div>
+  </div>
+</div>
+
+<script>
+const LESSON_DATA = {{ lesson_data_json | safe }};
+
+// 题目描述
+const descEl = document.getElementById("description");
+if (LESSON_DATA.description) {
+  descEl.textContent = "📋 " + LESSON_DATA.description;
+  descEl.style.display = "block";
+} else {
+  descEl.style.display = "none";
+}
+
+// 解题分步
+const stepsContainer = document.getElementById("steps-container");
+if (LESSON_DATA.steps && LESSON_DATA.steps.length > 0) {
+  LESSON_DATA.steps.forEach(step => {
+    const item = document.createElement("div");
+    item.className = "step-item";
+    item.innerHTML = `
+      <div class="step-title">步骤 ${step.step_number}: ${step.title || ""}</div>
+      <div class="step-desc">${step.description || ""}</div>
+      ${step.formula ? `<div class="step-formula">${step.formula}</div>` : ""}
+      ${step.result ? `<div class="step-desc" style="color:#3b82f6;margin-top:4px;">${step.result}</div>` : ""}
+    `;
+    stepsContainer.appendChild(item);
+  });
+} else {
+  stepsContainer.innerHTML = '<div class="empty-state"><div class="icon">🔢</div><div>分步解析将在内核实现后展示</div></div>';
+}
+
+// 答案渲染
+const answerBox = document.getElementById("answer-box");
+if (LESSON_DATA.answer && LESSON_DATA.answer.latex && LESSON_DATA.answer.latex !== "N/A") {
+  try { katex.render(LESSON_DATA.answer.latex, answerBox, { throwOnError: false }); }
+  catch(e) { answerBox.textContent = LESSON_DATA.answer.latex; }
+} else {
+  answerBox.textContent = "待计算";
+}
+
+// 渲染页面中的 KaTeX 公式
+if (window.katex) {
+  document.querySelectorAll(".step-formula, .step-desc").forEach(el => {
+    const text = el.textContent || "";
+    if (text.includes("\\")) {
+      try { katex.render(text, el, { throwOnError: false }); }
+      catch(e) { /* keep as-is */ }
+    }
+  });
+}
+</script>
+</body>
+</html>"""
+
+SUBJECT_NAMES = {
+    "solid_geometry": "立体几何",
+    "analytic_geometry": "解析几何",
+    "algebra": "代数",
+    "chemistry": "化学",
+    "unknown": "数理化",
+}
+
+
+def render_generic_lesson(kernel_result: dict) -> str:
+    """
+    通用课件渲染（解析几何/代数/化学等非 3D 科目）。
+    生成包含分步解析和 KaTeX 答案展示的 HTML 页面。
+    """
+    subject = kernel_result.get("subject", "unknown")
+    subject_name = SUBJECT_NAMES.get(subject, "数理化")
+
+    lesson_data = {
+        "subject": subject,
+        "description": kernel_result.get("description", ""),
+        "steps": kernel_result.get("steps", []),
+        "answer": kernel_result.get("answer", {}),
+        "subject_name": subject_name,
+    }
+
+    lesson_data_json = json.dumps(lesson_data, ensure_ascii=False)
+
+    return GENERIC_LESSON_TEMPLATE.replace(
+        "{{ lesson_data_json | safe }}", lesson_data_json
+    ).replace(
+        "{{ subject_name }}", subject_name
+    )
+
+
 async def save_lesson_html(html: str, lesson_dir: str | None = None) -> str:
     """保存课件 HTML 文件，返回文件路径。"""
     if lesson_dir is None:

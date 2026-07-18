@@ -171,11 +171,10 @@ def llm_structure(self, problem_id: str) -> dict:
 @celery_app.task(bind=True, name="sympy_compute")
 def sympy_compute(self, problem_id: str) -> dict:
     """
-    SymPy 计算任务：调用计算内核求解结构化题目。
+    SymPy 计算任务：根据学科路由到对应计算内核。
     创建 Lesson 记录，写入 kernel_result。
     """
     from app.models import Problem, Lesson
-    from app.kernels.geometry.kernel import SolidGeometryKernel
 
     logger.info(f"SymPy compute task started for problem {problem_id}")
 
@@ -192,36 +191,44 @@ def sympy_compute(self, problem_id: str) -> dict:
             return {"problem_id": problem_id, "status": "error", "error": "No structured data"}
 
         try:
-            # 调用计算内核
-            kernel = SolidGeometryKernel()
-            result = kernel.compute(problem.structured_json)
+            subject = problem.structured_json.get("subject", "solid_geometry")
+
+            if subject == "solid_geometry":
+                result = _compute_solid_geometry(problem.structured_json)
+            elif subject == "analytic_geometry":
+                result = _compute_stub("analytic_geometry", "解析几何")
+            elif subject == "algebra":
+                result = _compute_stub("algebra", "代数")
+            elif subject == "chemistry":
+                result = _compute_stub("chemistry", "化学")
+            else:
+                result = _compute_stub("unknown", "未知学科")
 
             # 创建或更新 Lesson
             lesson = db.query(Lesson).filter(Lesson.problem_id == problem_id).first()
             if not lesson:
                 lesson = Lesson(problem_id=uuid.UUID(problem_id))
 
-            # 将 ComputationResult 转为 dict
             kernel_dict = {
-                "subject": result.subject,
-                "body_type": result.body_type,
-                "problem_type": result.problem_type,
-                "answer": result.answer,
-                "steps": result.steps,
-                "model_3d": result.model_3d,
+                "subject": result.get("subject", subject),
+                "body_type": result.get("body_type", ""),
+                "problem_type": result.get("problem_type", ""),
+                "answer": result.get("answer", {}),
+                "steps": result.get("steps", []),
+                "model_3d": result.get("model_3d", {}),
             }
 
             lesson.kernel_result = kernel_dict
-            lesson.subject = result.subject
+            lesson.subject = result.get("subject", subject)
             db.add(lesson)
 
             logger.info(f"SymPy compute done for problem {problem_id}: "
-                        f"answer={result.answer.get('latex', 'N/A')}")
+                        f"answer={result.get('answer', {}).get('latex', 'N/A')}")
 
             return {
                 "problem_id": problem_id,
                 "status": "computing",
-                "answer": result.answer,
+                "answer": result.get("answer", {}),
             }
 
         except Exception as e:
@@ -231,16 +238,52 @@ def sympy_compute(self, problem_id: str) -> dict:
             return {"problem_id": problem_id, "status": "error", "error": str(e)}
 
 
+def _compute_solid_geometry(structured_json: dict) -> dict:
+    """调用立体几何计算内核。"""
+    from app.kernels.geometry.kernel import SolidGeometryKernel
+    kernel = SolidGeometryKernel()
+    result = kernel.compute(structured_json)
+    return {
+        "subject": result.subject,
+        "body_type": result.body_type,
+        "problem_type": result.problem_type,
+        "answer": result.answer,
+        "steps": result.steps,
+        "model_3d": result.model_3d,
+    }
+
+
+def _compute_stub(subject: str, display_name: str) -> dict:
+    """未实现学科的占位返回值。"""
+    return {
+        "subject": subject,
+        "body_type": "",
+        "problem_type": "",
+        "answer": {
+            "latex": "N/A",
+            "exact": "N/A",
+            "numeric": 0,
+        },
+        "steps": [{
+            "step_number": 1,
+            "title": f"{display_name}内核开发中",
+            "description": f"{display_name}计算内核尚未实现，将在后续版本中支持。",
+            "formula": "",
+            "result": "敬请期待 🚧",
+        }],
+        "model_3d": {},
+    }
+
+
 # ========== 课件渲染任务 ==========
 
 @celery_app.task(bind=True, name="render_lesson")
 def render_lesson(self, problem_id: str) -> dict:
     """
-    课件渲染任务：将计算结果渲染为独立 HTML 课件。
+    课件渲染任务：根据学科类型选择对应渲染器。
     更新 Lesson.html_content / html_file_path 和 Problem.status = "done"。
     """
     from app.models import Problem, Lesson
-    from app.services.render_service import render_solid_geometry_lesson
 
     logger.info(f"Render lesson task started for problem {problem_id}")
 
@@ -259,8 +302,14 @@ def render_lesson(self, problem_id: str) -> dict:
             return {"problem_id": problem_id, "status": "error", "error": "No kernel result"}
 
         try:
-            # 渲染 HTML
-            html = render_solid_geometry_lesson(lesson.kernel_result)
+            subject = lesson.kernel_result.get("subject", "solid_geometry")
+
+            if subject == "solid_geometry":
+                from app.services.render_service import render_solid_geometry_lesson
+                html = render_solid_geometry_lesson(lesson.kernel_result)
+            else:
+                from app.services.render_service import render_generic_lesson
+                html = render_generic_lesson(lesson.kernel_result)
 
             # 保存到文件
             lesson_dir = settings.LESSON_DIR
