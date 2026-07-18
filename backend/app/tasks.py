@@ -196,11 +196,11 @@ def sympy_compute(self, problem_id: str) -> dict:
             if subject == "solid_geometry":
                 result = _compute_solid_geometry(problem.structured_json)
             elif subject == "analytic_geometry":
-                result = _compute_stub("analytic_geometry", "解析几何")
+                result = _compute_analytic_geometry(problem.structured_json)
             elif subject == "algebra":
-                result = _compute_stub("algebra", "代数")
+                result = _compute_algebra(problem.structured_json)
             elif subject == "chemistry":
-                result = _compute_stub("chemistry", "化学")
+                result = _compute_chemistry(problem.structured_json)
             else:
                 result = _compute_stub("unknown", "未知学科")
 
@@ -251,6 +251,27 @@ def _compute_solid_geometry(structured_json: dict) -> dict:
         "steps": result.steps,
         "model_3d": result.model_3d,
     }
+
+
+def _compute_analytic_geometry(structured_json: dict) -> dict:
+    """调用解析几何计算内核。"""
+    from app.kernels.analytic.kernel import AnalyticGeometryKernel
+    kernel = AnalyticGeometryKernel()
+    return kernel.compute(structured_json)
+
+
+def _compute_algebra(structured_json: dict) -> dict:
+    """调用代数计算内核。"""
+    from app.kernels.algebra.kernel import AlgebraKernel
+    kernel = AlgebraKernel()
+    return kernel.compute(structured_json)
+
+
+def _compute_chemistry(structured_json: dict) -> dict:
+    """调用化学计算内核。"""
+    from app.kernels.chemistry.kernel import ChemistryKernel
+    kernel = ChemistryKernel()
+    return kernel.compute(structured_json)
 
 
 def _compute_stub(subject: str, display_name: str) -> dict:
