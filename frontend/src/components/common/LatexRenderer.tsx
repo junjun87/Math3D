@@ -7,19 +7,19 @@ import "katex/dist/katex.min.css";
 
 interface LatexRendererProps {
   latex: string;
-  display?: boolean;
 }
 
-export function LatexRenderer({ latex, display = false }: LatexRendererProps) {
+export function LatexRenderer({ latex }: LatexRendererProps) {
   const ref = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (ref.current && latex) {
       try {
         katex.render(latex, ref.current, {
-          displayMode: display,
+          displayMode: false,  // inline mode wraps on mobile
           throwOnError: false,
           trust: true,
+          strict: false,
         });
       } catch (e) {
         ref.current.textContent = latex;
@@ -27,5 +27,5 @@ export function LatexRenderer({ latex, display = false }: LatexRendererProps) {
     }
   }, [latex, display]);
 
-  return <span ref={ref} />;
+  return <span ref={ref} className="break-words" />;
 }

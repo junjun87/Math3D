@@ -108,12 +108,12 @@ export default function ResultPage() {
             </p>
             {step.formula && (
               <div className="bg-gray-50 rounded-lg p-3 mb-2 break-words">
-                <LatexRenderer latex={step.formula} display />
+                <LatexRenderer latex={step.formula} />
               </div>
             )}
             {step.result && (
               <div className="bg-green-50 rounded-lg p-3 border border-green-200 break-words">
-                <LatexRenderer latex={step.result} display />
+                <LatexRenderer latex={step.result} />
               </div>
             )}
           </div>
@@ -127,7 +127,7 @@ export default function ResultPage() {
           <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl p-5 text-white">
             <div className="text-center">
               <div className="text-2xl font-bold overflow-x-auto">
-                <LatexRenderer latex={answer.latex} display />
+                <LatexRenderer latex={answer.latex} />
               </div>
               {answer.numeric !== undefined && (
                 <div className="text-primary-100 text-sm mt-2">
