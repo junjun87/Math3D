@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { getProblemLesson, getLessonViewUrl, getLessonDownloadUrl } from "../services/api";
+import { LatexRenderer } from "../components/common/LatexRenderer";
 
 export default function ResultPage() {
   const { problemId } = useParams<{ problemId: string }>();
@@ -82,10 +83,14 @@ export default function ResultPage() {
             </div>
             <p className="text-sm text-gray-600 mb-2 whitespace-pre-wrap break-words">{step.description}</p>
             {step.formula && (
-              <div className="bg-gray-50 rounded-lg p-3 mb-2 text-sm break-words">{step.formula}</div>
+              <div className="bg-gray-50 rounded-lg p-3 mb-2 break-words">
+                <LatexRenderer latex={step.formula} block />
+              </div>
             )}
             {step.result && (
-              <div className="bg-green-50 rounded-lg p-3 border border-green-200 text-sm break-words">{step.result}</div>
+              <div className="bg-green-50 rounded-lg p-3 border border-green-200 break-words">
+                <LatexRenderer latex={step.result} block />
+              </div>
             )}
           </div>
         ))}
@@ -96,7 +101,9 @@ export default function ResultPage() {
         <div className="mx-4 mt-4 mb-6">
           <h2 className="font-semibold text-lg mb-2">✨ 答案</h2>
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-5 text-white text-center">
-            <div className="text-2xl font-bold break-words">{kr.answer.latex || "N/A"}</div>
+            <div className="text-2xl font-bold break-words">
+              <LatexRenderer latex={kr.answer.latex || "N/A"} block />
+            </div>
             {kr.answer.numeric !== undefined && (
               <div className="text-blue-100 text-sm mt-2">≈ {kr.answer.numeric.toFixed(4)}</div>
             )}
