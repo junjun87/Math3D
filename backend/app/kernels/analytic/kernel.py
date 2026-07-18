@@ -590,35 +590,36 @@ class AnalyticGeometryKernel:
             return None
 
         line_str = line_str.replace(" ", "")
-        # 标准化为 =0 形式
-        if "=" in line_str:
-            left, right = line_str.split("=", 1)
-            expr_str = f"({left})-({right})"
-        else:
-            expr_str = line_str
-
         try:
-            expr = sp.sympify(expr_str)
-            # 找两个点
-            x0, y0 = 0, 0
-            # 解出 y 截距
-            y0_expr = sp.solve(expr.subs(self.x, 0), self.y)
-            if y0_expr:
-                y0 = float(y0_expr[0].evalf())
-            # 解出 x 截距
-            x0_expr = sp.solve(expr.subs(self.y, 0), self.x)
-            if x0_expr:
-                x0 = float(x0_expr[0].evalf())
+            # 提取系数 a, b, c from ax + by + c = 0
+            # 匹配: [系数]x [+/- 系数]y [+/- 系数] = 0
+            pattern = r'^([+\-\d\.]*)x\s*([+\-][\d\.]*)y\s*([+\-][\d\.]*)\s*=\s*0$'
+            m = re.match(pattern, line_str)
 
-            if x0 == 0 and y0 == 0:
-                return sp.Line(sp.Point(0, 0), sp.Point(1, 1))
+            if not m:
+                # 尝试 ax + by = c 形式
+                pattern2 = r'^([+\-\d\.]*)x\s*([+\-][\d\.]*)y\s*=\s*([+\-\d\.]+)$'
+                m = re.match(pattern2, line_str)
+                if m:
+                    a_str, b_str, c_str = m.groups()
+                    c = -float(sp.sympify(c_str))
+                else:
+                    return None
+            else:
+                a_str, b_str, c_str = m.groups()
 
-            p1 = sp.Point(0, float(sp.N(sp.solve(expr.subs(self.x, 0), self.y)[0])))
-            p2 = sp.Point(float(sp.N(sp.solve(expr.subs(self.y, 0), self.x)[0])), 0)
+            a = float(sp.sympify(a_str)) if a_str and a_str not in ("+", "-") else (1.0 if a_str != "-" else -1.0)
+            b = float(sp.sympify(b_str)) if b_str and b_str not in ("+", "-") else (1.0 if b_str != "-" else -1.0)
+            c = float(sp.sympify(c_str)) if c_str and c_str not in ("+", "-") else (0.0 if c_str != "-" else 0.0)
 
-            # 处理退化情况
-            if sp.simplify(p1.distance(p2)) == 0:
-                p2 = sp.Point(1, p1.y + 1)
+            if abs(b) > 1e-10:
+                p1 = sp.Point(0, -c / b)
+                p2 = sp.Point(1, -(a + c) / b)
+            elif abs(a) > 1e-10:
+                p1 = sp.Point(-c / a, 0)
+                p2 = sp.Point(-c / a, 1)
+            else:
+                return None
 
             return sp.Line(p1, p2)
         except Exception:

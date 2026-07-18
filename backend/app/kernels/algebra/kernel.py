@@ -67,6 +67,7 @@ class AlgebraKernel:
             expr_str = self._extract_expression(desc)
 
         try:
+            expr_str = self._normalize_expr(expr_str)
             if "=" in expr_str:
                 left_str, right_str = expr_str.split("=", 1)
                 eq = sp.Eq(sp.sympify(left_str), sp.sympify(right_str))
@@ -118,6 +119,7 @@ class AlgebraKernel:
             expr_str = self._extract_expression(desc)
 
         try:
+            expr_str = self._normalize_expr(expr_str)
             if "=" in expr_str:
                 left_str, right_str = expr_str.split("=", 1)
                 eq = sp.Eq(sp.sympify(left_str), sp.sympify(right_str))
@@ -244,6 +246,7 @@ class AlgebraKernel:
             expr_str = self._extract_expression(desc)
 
         try:
+            expr_str = self._normalize_expr(expr_str)
             # 转换为不等式
             if ">=" in expr_str:
                 left, right = expr_str.rsplit(">=", 1)
@@ -386,6 +389,7 @@ class AlgebraKernel:
             expr_str = self._extract_expression(desc)
 
         try:
+            expr_str = self._normalize_expr(expr_str)
             expr = sp.sympify(expr_str)
             factored = sp.factor(expr)
 
@@ -427,6 +431,7 @@ class AlgebraKernel:
             expr_str = self._extract_expression(desc)
 
         try:
+            expr_str = self._normalize_expr(expr_str)
             expr = sp.sympify(expr_str)
             f = sp.Lambda(self.x, expr)
 
@@ -484,6 +489,7 @@ class AlgebraKernel:
             expr_str = self._extract_expression(desc)
 
         try:
+            expr_str = self._normalize_expr(expr_str)
             expr = sp.sympify(expr_str)
             simplified = sp.simplify(expr)
 
@@ -512,15 +518,23 @@ class AlgebraKernel:
 
     # ========== 辅助方法 ==========
 
+    def _normalize_expr(self, expr_str: str) -> str:
+        """归一化表达式：^→**，去除Unicode，规范化空格。"""
+        expr_str = expr_str.replace(" ", "")
+        expr_str = expr_str.replace("^", "**")
+        # Unicode superscript → normal
+        expr_str = expr_str.replace("²", "**2").replace("³", "**3").replace("⁴", "**4")
+        # 隐式乘法: 5x → 5*x（仅当数字紧接变量时）
+        expr_str = re.sub(r'(\d)([a-zA-Z])', r'\1*\2', expr_str)
+        return expr_str
+
     def _extract_expression(self, text: str) -> str:
         """从文本中提取代数表达式。"""
         # 去掉中文描述，保留数学表达式
-        # 匹配 x^2 - 5x + 6 = 0 这类表达式
         match = re.search(r'([xyzn]\^?\d*\s*[\+\-\*\/]\s*[\d\w\^\+\-\*\/\(\)\s]*)(?:$|\。|\；|，)', text)
         if match:
-            return match.group(1).strip()
-        # 简单匹配
+            return self._normalize_expr(match.group(1))
         match = re.search(r'([\w\^\+\-\*\/\(\)\=]+(?:[\+\-\*\/][\w\^\+\-\*\/\(\)\=]+)+)', text)
         if match:
-            return match.group(1).strip()
-        return text.strip()
+            return self._normalize_expr(match.group(1))
+        return self._normalize_expr(text.strip())
