@@ -29,6 +29,9 @@ pillow-heif==0.21.0
 # HTTP Client
 httpx==0.28.1
 
+# Alibaba Cloud OCR SDK
+alibabacloud-ocr-api20210707
+
 # Utilities
 pydantic==2.10.4
 pydantic-settings==2.7.1
