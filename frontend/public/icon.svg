@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="100" fill="url(#bg)"/>
+  <g transform="translate(256,256)">
+    <!-- 3D cube sketch -->
+    <polygon points="-90,-120 90,-120 140,-50 -40,-50" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round"/>
+    <polygon points="-90,-120 -90,-20 -40,50 -40,-50" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round"/>
+    <polygon points="90,-120 90,-20 -40,50 -40,-50" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" opacity="0.6"/>
+    <polygon points="-90,-20 90,-20 140,50 -40,50" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round"/>
+    <!-- Math symbol overlay -->
+    <text x="15" y="-45" font-family="serif" font-size="80" font-weight="bold" fill="white" text-anchor="middle" opacity="0.9">π</text>
+    <text x="15" y="40" font-family="serif" font-size="60" fill="white" text-anchor="middle" opacity="0.7">√</text>
+  </g>
+</svg>
