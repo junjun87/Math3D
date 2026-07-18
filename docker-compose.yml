@@ -115,8 +115,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: dev
     container_name: math3d-frontend
-    command: npm run dev -- --host 0.0.0.0
     ports:
       - "5173:5173"
     volumes:
