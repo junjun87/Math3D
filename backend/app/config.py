@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     LLM_API_BASE: str = "https://api.anthropic.com"
     LLM_MODEL: str = "claude-sonnet-5"
 
+    # Alibaba Cloud OCR
+    ALIBABA_CLOUD_ACCESS_KEY_ID: str = ""
+    ALIBABA_CLOUD_ACCESS_KEY_SECRET: str = ""
+
     # File Storage
     UPLOAD_DIR: str = "./uploads"
     LESSON_DIR: str = "./lessons"
