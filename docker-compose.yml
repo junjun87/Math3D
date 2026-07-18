@@ -80,27 +80,6 @@ services:
   ocr:
     build:
       context: ./ml_service
-      dockerfile: Dockerfile
-    container_name: math3d-ocr
-    ports:
-      - "8001:8001"
-    volumes:
-      - ./ml_service/app:/app
-    environment:
-      - OCR_LANG=${OCR_LANG:-ch}
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-    profiles:
-      - gpu  # 仅当指定 --profile gpu 时启动
-
-  ocr:
-    build:
-      context: ./ml_service
       dockerfile: Dockerfile.cpu
     container_name: math3d-ocr
     ports:
