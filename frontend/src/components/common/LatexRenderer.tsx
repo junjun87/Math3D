@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import "katex/dist/katex.min.css";
 
 interface Props {
   latex: string;
