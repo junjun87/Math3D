@@ -44,11 +44,12 @@ async def upload_problem_image(
 
     async with aiofiles.open(filepath, "wb") as f:
         await f.write(contents)
+        await f.flush()
 
-    # 创建缩略图
+    # 创建缩略图（失败不影响上传流程）
     thumb_filename = f"thumb_{filename}"
     thumb_path = os.path.join(settings.UPLOAD_DIR, thumb_filename)
-    await create_thumbnail(filepath, thumb_path)
+    thumb_ok = await create_thumbnail(filepath, thumb_path)
 
     # 创建数据库记录
     problem = Problem(

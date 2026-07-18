@@ -8,15 +8,22 @@ async def create_thumbnail(
     input_path: str,
     output_path: str,
     size: tuple[int, int] = (300, 300),
-) -> None:
-    """创建缩略图。"""
-    async with aiofiles.open(input_path, "rb") as f:
-        data = await f.read()
+) -> bool:
+    """创建缩略图。返回 True 表示成功，False 表示跳过（格式不支持）。"""
+    try:
+        async with aiofiles.open(input_path, "rb") as f:
+            data = await f.read()
 
-    image = Image.open(io.BytesIO(data))
-    image = image.convert("RGB")
-    image.thumbnail(size, Image.LANCZOS)
-    image.save(output_path, "JPEG", quality=85)
+        if not data:
+            return False
+
+        image = Image.open(io.BytesIO(data))
+        image = image.convert("RGB")
+        image.thumbnail(size, Image.LANCZOS)
+        image.save(output_path, "JPEG", quality=85)
+        return True
+    except Exception:
+        return False
 
 
 async def compress_image(
