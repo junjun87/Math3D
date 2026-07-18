@@ -41,10 +41,11 @@ services:
       - ./backend:/app
       - uploads_data:/app/uploads
       - lessons_data:/app/lessons
+    env_file:
+      - .env
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-math3d}:${POSTGRES_PASSWORD:-math3d_secret}@postgres:5432/${POSTGRES_DB:-math3d}
       - REDIS_URL=redis://redis:6379/0
-      - OCR_SERVICE_URL=http://ocr:8001
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_API_BASE=${LLM_API_BASE:-https://api.anthropic.com}
     depends_on:
@@ -54,6 +55,8 @@ services:
         condition: service_healthy
 
   backend-worker:
+    env_file:
+      - .env
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -67,7 +70,6 @@ services:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-math3d}:${POSTGRES_PASSWORD:-math3d_secret}@postgres:5432/${POSTGRES_DB:-math3d}
       - 'DATABASE_URL_SYNC=postgresql+psycopg2://${POSTGRES_USER:-math3d}:${POSTGRES_PASSWORD:-math3d_secret}@postgres:5432/${POSTGRES_DB:-math3d}'
       - REDIS_URL=redis://redis:6379/0
-      - OCR_SERVICE_URL=http://ocr:8001
       - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_API_BASE=${LLM_API_BASE:-https://api.anthropic.com}
     depends_on:
