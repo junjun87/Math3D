@@ -41,9 +41,9 @@ async def recognize_text(image_bytes: bytes) -> dict:
             ratio = max_dim / max(w, h)
             img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
         buf = io.BytesIO()
-        img.save(buf, format="JPEG", quality=80)
+        img.save(buf, format="PNG")
         image_bytes = buf.getvalue()
-        logger.info(f"OCR image converted to JPEG: {len(image_bytes) / 1024:.0f}KB ({img.size[0]}x{img.size[1]})")
+        logger.info(f"OCR image converted to PNG: {len(image_bytes) / 1024:.0f}KB ({img.size[0]}x{img.size[1]})")
     except Exception as e:
         logger.warning(f"Image preprocessing failed, using original: {e}")
         # 即使预处理失败也用原始图试试（可能是 JPEG 格式）
