@@ -75,12 +75,16 @@ async def recognize_text(image_bytes: bytes) -> dict:
             )
             resp.raise_for_status()
             data = resp.json()
-
+            logger.info(f"Aliyun OCR response keys: {list(data.keys())}")
             return _parse_response(data)
 
     except httpx.HTTPError as e:
         logger.error(f"Alibaba Cloud OCR API error: {e}")
-        # 回退到 mock 而不是崩溃
+        if hasattr(e, 'response') and e.response is not None:
+            logger.error(f"Response body: {e.response.text[:500]}")
+        return _mock_recognize(image_bytes)
+    except Exception as e:
+        logger.error(f"OCR unexpected error: {e}", exc_info=True)
         return _mock_recognize(image_bytes)
 
 
@@ -122,25 +126,24 @@ def _sign(ak_id: str, ak_secret: str, method: str, uri: str,
 
 
 def _parse_response(data: dict) -> dict:
-    """解析阿里云 OCR 响应，转为统一格式。"""
-    regions = data.get("Data", {}).get("Content", [])  # type: ignore
+    """解析阿里云 OCR 响应，转为统一格式。兼容 Content 为字符串或数组。"""
+    content = data.get("Data", {}).get("Content", "")
 
+    if isinstance(content, str):
+        # General OCR 返回纯文本字符串
+        raw_text = content.strip()
+        return {
+            "raw_text": raw_text,
+            "text_blocks": [{"text": raw_text, "confidence": 0.99, "bbox": []}],
+            "confidence": 0.99,
+        }
+
+    # 结构化 OCR 返回数组
     text_blocks = []
-    for block in regions:
+    for block in (content or []):
         text = block.get("Text", "")
         confidence = block.get("Confidence", 0) / 100.0
-        pos = block.get("Position", {})
-        bbox = [
-            [pos.get("X", 0), pos.get("Y", 0)],
-            [pos.get("X", 0) + pos.get("Width", 100), pos.get("Y", 0)],
-            [pos.get("X", 0) + pos.get("Width", 100), pos.get("Y", 0) + pos.get("Height", 30)],
-            [pos.get("X", 0), pos.get("Y", 0) + pos.get("Height", 30)],
-        ]
-        text_blocks.append({
-            "text": text,
-            "confidence": round(confidence, 4),
-            "bbox": bbox,
-        })
+        text_blocks.append({"text": text, "confidence": round(confidence, 4), "bbox": []})
 
     raw_text = "\n".join(t["text"] for t in text_blocks)
     avg_confidence = sum(t["confidence"] for t in text_blocks) / len(text_blocks) if text_blocks else 0
