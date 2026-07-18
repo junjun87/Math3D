@@ -24,13 +24,32 @@ async def recognize_text(image_bytes: bytes) -> dict:
         logger.warning("Alibaba Cloud credentials not configured, using mock")
         return _mock_recognize()
 
+    # 压缩大图：限制 max 2048px 边，减小传输体积
+    try:
+        from PIL import Image
+        import io
+        img = Image.open(io.BytesIO(image_bytes))
+        w, h = img.size
+        max_dim = 2048
+        if max(w, h) > max_dim:
+            ratio = max_dim / max(w, h)
+            img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
+            buf = io.BytesIO()
+            img.convert("RGB").save(buf, format="JPEG", quality=85)
+            image_bytes = buf.getvalue()
+    except Exception:
+        pass  # 压缩失败就用原始图
+
     img_base64 = base64.b64encode(image_bytes).decode()
+    logger.info(f"OCR image size after compress: {len(image_bytes) / 1024:.0f}KB")
 
     try:
         from alibabacloud_ocr_api20210707.client import Client
         from alibabacloud_ocr_api20210707.models import RecognizeGeneralRequest
         from alibabacloud_tea_openapi.models import Config as OcrConfig
+        from alibabacloud_tea_util.models import RuntimeOptions
 
+        # 使用阿里云内网 endpoint，不走公网
         config = OcrConfig(
             access_key_id=ak_id,
             access_key_secret=ak_secret,
@@ -40,7 +59,11 @@ async def recognize_text(image_bytes: bytes) -> dict:
         req = RecognizeGeneralRequest(
             body=json.dumps({"ImageBase64": img_base64}, ensure_ascii=False),
         )
-        resp = client.recognize_general(req)
+        runtime = RuntimeOptions(
+            connect_timeout=10000,
+            read_timeout=60000,  # 大图片 60 秒超时
+        )
+        resp = client.recognize_general_with_options(req, runtime)
         data = resp.body.to_map()
 
         return _parse_response(data)
