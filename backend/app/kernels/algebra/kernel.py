@@ -22,9 +22,11 @@ class AlgebraResult:
 class AlgebraKernel:
 
     def __init__(self):
-        self.x = sp.Symbol("x", real=True)
-        self.y = sp.Symbol("y", real=True)
-        self.z = sp.Symbol("z", real=True)
+        # 使用 sp.var 确保全局符号缓存，sympify/solve 都会使用同一对象
+        sp.var("x y z n", real=True)
+        self.x = sp.Symbol("x")
+        self.y = sp.Symbol("y")
+        self.z = sp.Symbol("z")
         self.n = sp.Symbol("n", integer=True, positive=True)
 
     def compute(self, problem: dict) -> dict:
@@ -126,15 +128,16 @@ class AlgebraKernel:
             else:
                 eq = sp.Eq(sp.sympify(expr_str), 0)
 
+            x = sp.Symbol("x")
             expr = sp.expand(eq.lhs - eq.rhs)
             # 整理为标准形式
-            a = sp.simplify(expr.coeff(self.x, 2))
-            b = sp.simplify(expr.coeff(self.x, 1))
-            c = sp.simplify(expr.coeff(self.x, 0)) if self.x not in expr.free_symbols or expr != sp.simplify(expr.subs(self.x, 0)) else sp.sympify(0)
+            a = sp.simplify(expr.coeff(x, 2))
+            b = sp.simplify(expr.coeff(x, 1))
+            c = sp.simplify(expr.subs(x, 0))
 
             discriminant = b**2 - 4*a*c
 
-            solutions = sp.solve(eq, self.x)
+            solutions = sp.solve(eq, x)
 
             steps = [
                 {"step_number": 1, "title": "化为标准形式",
