@@ -33,15 +33,27 @@ INLINE_SOLID_GEOMETRY_TEMPLATE = """<!DOCTYPE html>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; overflow: hidden; }
   #container { width: 100vw; height: 100vh; position: relative; }
-  #controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 10; }
-  #controls button { padding: 8px 16px; border: none; border-radius: 20px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); cursor: pointer; font-size: 14px; }
+  /* 底部控制栏 */
+  #controls { position: absolute; bottom: 20px; left: 0; right: 0; display: flex; gap: 6px; z-index: 10; padding: 0 16px; overflow-x: auto; justify-content: center; }
+  #controls button { padding: 8px 14px; border: none; border-radius: 20px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,0.15); cursor: pointer; font-size: 13px; white-space: nowrap; flex-shrink: 0; }
   #controls button.active { background: #3b82f6; color: white; }
-  #info-panel { position: absolute; top: 20px; right: 20px; background: white; border-radius: 12px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.1); max-width: 280px; z-index: 10; font-size: 14px; }
-  #info-panel h3 { margin-bottom: 8px; color: #3b82f6; }
-  .step-item { padding: 6px 0; border-bottom: 1px solid #eee; cursor: pointer; }
-  .step-item:hover { color: #3b82f6; }
-  .answer-box { margin-top: 12px; padding: 12px; background: #eff6ff; border-radius: 8px; text-align: center; font-size: 18px; font-weight: bold; color: #1d4ed8; }
+  /* 顶部信息面板 */
+  #info-panel { position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.95); border-radius: 12px; padding: 12px; box-shadow: 0 2px 12px rgba(0,0,0,0.15); max-width: 240px; z-index: 10; font-size: 13px; transition: transform 0.3s; }
+  #info-panel.collapsed { transform: translateX(calc(100% + 20px)); }
+  #info-toggle { position: absolute; top: 50%; left: -28px; transform: translateY(-50%); width: 24px; height: 48px; background: rgba(255,255,255,0.9); border: none; border-radius: 6px 0 0 6px; cursor: pointer; font-size: 14px; box-shadow: -2px 0 8px rgba(0,0,0,0.1); display: flex; align-items: center; justify-content: center; }
+  #info-panel h3 { margin-bottom: 6px; color: #3b82f6; font-size: 14px; }
+  .step-detail { padding: 4px 0; border-bottom: 1px solid #eee; font-size: 12px; color: #64748b; }
+  .step-detail strong { color: #334155; }
+  .answer-box { margin-top: 10px; padding: 10px; background: #eff6ff; border-radius: 8px; text-align: center; font-size: 16px; font-weight: bold; color: #1d4ed8; word-break: break-all; }
   #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); font-size: 18px; color: #999; }
+  /* 移动端适配 */
+  @media (max-width: 600px) {
+    #info-panel { max-width: 200px; font-size: 12px; top: 8px; right: 8px; padding: 8px; }
+    #info-panel h3 { font-size: 12px; }
+    .answer-box { font-size: 14px; padding: 8px; }
+    #controls { bottom: 10px; gap: 4px; }
+    #controls button { font-size: 12px; padding: 6px 10px; }
+  }
 </style>
 </head>
 <body>
@@ -184,12 +196,21 @@ for (const [label, pos] of Object.entries(points)) {
   scene.add(sprite);
 }
 
+// LaTeX 渲染 (KaTeX)
+const katexLink = document.createElement("link");
+katexLink.rel = "stylesheet";
+katexLink.href = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css";
+document.head.appendChild(katexLink);
+const katexScript = document.createElement("script");
+katexScript.src = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js";
+document.head.appendChild(katexScript);
+
 // ============ 构建 UI ============
 const controlsDiv = document.createElement("div");
 controlsDiv.id = "controls";
 container.appendChild(controlsDiv);
 
-// 步骤按钮
+// 步骤按钮 — 点击更新信息面板内容
 if (LESSON_DATA.steps) {
   LESSON_DATA.steps.forEach((step, i) => {
     const btn = document.createElement("button");
@@ -197,41 +218,66 @@ if (LESSON_DATA.steps) {
     btn.onclick = () => {
       document.querySelectorAll("#controls button").forEach(b => b.classList.remove("active"));
       btn.classList.add("active");
-      controls.target.set(1, 1, 1);
-      controls.update();
+      // 更新信息面板中的步骤详情
+      const info = document.getElementById("step-info");
+      if (info) {
+        info.innerHTML = `<div class="step-detail"><strong>${step.title || ""}</strong></div>
+          <div class="step-detail">${step.description || ""}</div>
+          ${step.formula ? `<div class="step-detail">${step.formula}</div>` : ""}
+          ${step.result ? `<div class="step-detail" style="color:#3b82f6;margin-top:2px;">→ ${step.result}</div>` : ""}`;
+        // 渲染步骤中的 LaTeX
+        if (window.katex) {
+          info.querySelectorAll(".step-detail").forEach(el => {
+            try { katex.render(el.textContent, el, { throwOnError: false }); } catch(e) {}
+          });
+        }
+      }
     };
     if (i === 0) btn.classList.add("active");
     controlsDiv.appendChild(btn);
   });
 }
 
-// 信息面板
+// 信息面板 — 可折叠
 const infoPanel = document.createElement("div");
 infoPanel.id = "info-panel";
+const firstStep = LESSON_DATA.steps?.[0];
 infoPanel.innerHTML = `
+  <button id="info-toggle">◀</button>
   <h3>📐 ${LESSON_DATA.body_type || "立体几何"}</h3>
-  <div id="step-info">${LESSON_DATA.steps?.[0]?.title || ""}: ${LESSON_DATA.steps?.[0]?.description || ""}</div>
-  <div class="answer-box">答案: ${LESSON_DATA.answer?.latex || "N/A"}</div>
+  <div id="step-info">
+    <div class="step-detail"><strong>${firstStep?.title || ""}</strong></div>
+    <div class="step-detail">${firstStep?.description || ""}</div>
+    ${firstStep?.formula ? `<div class="step-detail">${firstStep.formula}</div>` : ""}
+    ${firstStep?.result ? `<div class="step-detail" style="color:#3b82f6;margin-top:2px;">→ ${firstStep.result}</div>` : ""}
+  </div>
+  <div class="answer-box" id="answer-box"></div>
 `;
-if (LESSON_DATA.answer?.latex) {
-  // LaTeX rendering via KaTeX CDN
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css";
-  document.head.appendChild(link);
-  const script = document.createElement("script");
-  script.src = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js";
-  script.onload = () => {
-    if (window.katex) {
-      const el = infoPanel.querySelector(".answer-box");
-      try {
-        katex.render(LESSON_DATA.answer.latex, el, { throwOnError: false });
-      } catch(e) {}
-    }
-  };
-  document.head.appendChild(script);
-}
 container.appendChild(infoPanel);
+
+// 折叠/展开
+const toggleBtn = infoPanel.querySelector("#info-toggle");
+let panelVisible = true;
+toggleBtn.onclick = () => {
+  panelVisible = !panelVisible;
+  infoPanel.classList.toggle("collapsed", !panelVisible);
+  toggleBtn.textContent = panelVisible ? "◀" : "▶";
+};
+
+// 渲染答案
+setTimeout(() => {
+  const answerEl = document.getElementById("answer-box");
+  if (LESSON_DATA.answer?.latex && LESSON_DATA.answer.latex !== "N/A") {
+    if (window.katex) {
+      try { katex.render(LESSON_DATA.answer.latex, answerEl, { throwOnError: false }); }
+      catch(e) { answerEl.textContent = "答案: " + LESSON_DATA.answer.latex; }
+    } else {
+      answerEl.textContent = "答案: " + LESSON_DATA.answer.latex;
+    }
+  } else {
+    answerEl.textContent = "答案: N/A";
+  }
+}, 300);
 
 // ============ 动画循环 ============
 function animate() {
