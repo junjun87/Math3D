@@ -73,11 +73,9 @@ def ocr_recognize(self, problem_id: str) -> dict:
             if not os.path.exists(image_path):
                 raise FileNotFoundError(f"Image file not found: {image_path}")
 
-            # 调用阿里云 OCR（替代本地 PaddleOCR）
+            # 调用阿里云 OCR（传图片路径，用 ImageURL 方式）
             from app.services.ocr_service import recognize_text
-            with open(image_path, "rb") as f:
-                image_bytes = f.read()
-            ocr_data = asyncio.run(recognize_text(image_bytes))
+            ocr_data = asyncio.run(recognize_text(image_path))
             raw_text = ocr_data.get("raw_text", "")
             confidence = ocr_data.get("confidence", 0.0)
 

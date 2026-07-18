@@ -1,10 +1,11 @@
 """
 阿里云 OCR 服务 — 使用官方 SDK 调用文字识别 API。
+通过 ImageURL 方式，将服务器上图片供阿里云下载后识别。
 """
 
-import base64
 import json
 import logging
+import os
 
 from app.config import get_settings
 
@@ -12,10 +13,10 @@ logger = logging.getLogger("ocr_service")
 settings = get_settings()
 
 
-async def recognize_text(image_bytes: bytes) -> dict:
+async def recognize_text(image_path: str) -> dict:
     """
     调用阿里云通用文字识别 API (RecognizeGeneral)。
-    返回：{ raw_text, text_blocks, confidence }
+    使用 ImageURL 方式，避免 base64 编码问题。
     """
     ak_id = settings.ALIBABA_CLOUD_ACCESS_KEY_ID
     ak_secret = settings.ALIBABA_CLOUD_ACCESS_KEY_SECRET
@@ -24,39 +25,16 @@ async def recognize_text(image_bytes: bytes) -> dict:
         logger.warning("Alibaba Cloud credentials not configured, using mock")
         return _mock_recognize()
 
-    # 统一转为 JPEG 格式（阿里云 OCR 不支持 HEIC 等格式）
-    try:
-        from PIL import Image
-        import io
-        img = Image.open(io.BytesIO(image_bytes))
-        # 统一转 RGB
-        if img.mode in ("RGBA", "P", "LA"):
-            img = img.convert("RGB")
-        elif img.mode != "RGB":
-            img = img.convert("RGB")
-        # 限制最大边 2048px
-        w, h = img.size
-        max_dim = 2048
-        if max(w, h) > max_dim:
-            ratio = max_dim / max(w, h)
-            img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        image_bytes = buf.getvalue()
-        logger.info(f"OCR image converted to PNG: {len(image_bytes) / 1024:.0f}KB ({img.size[0]}x{img.size[1]})")
-    except Exception as e:
-        logger.warning(f"Image preprocessing failed, using original: {e}")
-        # 即使预处理失败也用原始图试试（可能是 JPEG 格式）
-
-    img_base64 = base64.b64encode(image_bytes).decode()
+    # 构造公开可访问的图片 URL
+    filename = os.path.basename(image_path)
+    image_url = f"http://59.110.93.243:8000/static/uploads/{filename}"
+    logger.info(f"OCR using Image URL: {image_url}")
 
     try:
         from alibabacloud_ocr_api20210707.client import Client
         from alibabacloud_ocr_api20210707.models import RecognizeGeneralRequest
         from alibabacloud_tea_openapi.models import Config as OcrConfig
-        from alibabacloud_tea_util.models import RuntimeOptions
 
-        # 使用阿里云内网 endpoint，不走公网
         config = OcrConfig(
             access_key_id=ak_id,
             access_key_secret=ak_secret,
@@ -64,13 +42,9 @@ async def recognize_text(image_bytes: bytes) -> dict:
         )
         client = Client(config)
         req = RecognizeGeneralRequest(
-            body=json.dumps({"ImageBase64": img_base64}, ensure_ascii=False),
+            body=json.dumps({"ImageURL": image_url}, ensure_ascii=False),
         )
-        runtime = RuntimeOptions(
-            connect_timeout=10000,
-            read_timeout=60000,  # 大图片 60 秒超时
-        )
-        resp = client.recognize_general_with_options(req, runtime)
+        resp = client.recognize_general(req)
         data = resp.body.to_map()
 
         return _parse_response(data)
