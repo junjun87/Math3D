@@ -3,10 +3,9 @@
  */
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { getProblemLesson, getLesson, getLessonViewUrl, getLessonDownloadUrl } from "../services/api";
+import { getProblemLesson, getLessonViewUrl, getLessonDownloadUrl } from "../services/api";
 import type { LessonData } from "../types/api";
 import { LatexRenderer } from "../components/common/LatexRenderer";
-import { StepNavigation } from "../components/common/StepNavigation";
 
 export default function ResultPage() {
   const { problemId } = useParams<{ problemId: string }>();
@@ -15,7 +14,6 @@ export default function ResultPage() {
   const [lesson, setLesson] = useState<LessonData | null>(null);
   const [status, setStatus] = useState<string>("computing");
   const [loading, setLoading] = useState(true);
-  const [activeStep, setActiveStep] = useState(0);
 
   useEffect(() => {
     if (!problemId) return;
@@ -92,34 +90,34 @@ export default function ResultPage() {
         </div>
       )}
 
-      {/* 分步解析 */}
+      {/* 分步解析 — 全部展开 */}
       <div className="mx-4 mt-4">
-        <h2 className="font-semibold text-lg mb-2">📝 解题步骤</h2>
-        <StepNavigation
-          steps={steps}
-          activeStep={activeStep}
-          onStepChange={setActiveStep}
-        />
-        {steps[activeStep] && (
-          <div className="bg-white rounded-xl border p-4 mt-3">
-            <h3 className="font-semibold text-primary-700 mb-2">
-              {steps[activeStep].title}
-            </h3>
-            <p className="text-sm text-gray-600 mb-3">
-              {steps[activeStep].description}
+        <h2 className="font-semibold text-lg mb-3">📝 解题步骤</h2>
+        {steps.map((step, i) => (
+          <div key={i} className="bg-white rounded-xl border p-4 mb-3">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-6 h-6 rounded-full bg-primary-500 text-white text-xs flex items-center justify-center font-bold">
+                {step.step_number}
+              </span>
+              <h3 className="font-semibold text-primary-700 text-sm">
+                {step.title}
+              </h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-2 break-words">
+              {step.description}
             </p>
-            {steps[activeStep].formula && (
-              <div className="bg-gray-50 rounded-lg p-3 mb-2 overflow-x-auto">
-                <LatexRenderer latex={steps[activeStep].formula} display />
+            {step.formula && (
+              <div className="bg-gray-50 rounded-lg p-3 mb-2 break-words">
+                <LatexRenderer latex={step.formula} display />
               </div>
             )}
-            {steps[activeStep].result && (
-              <div className="bg-green-50 rounded-lg p-3 border border-green-200">
-                <LatexRenderer latex={steps[activeStep].result} display />
+            {step.result && (
+              <div className="bg-green-50 rounded-lg p-3 border border-green-200 break-words">
+                <LatexRenderer latex={step.result} display />
               </div>
             )}
           </div>
-        )}
+        ))}
       </div>
 
       {/* 答案卡片 */}
