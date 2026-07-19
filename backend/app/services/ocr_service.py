@@ -30,8 +30,8 @@ async def recognize_text(image_path: str) -> dict:
     except OSError as error:
         raise OCRServiceError(f"Failed to read image: {error}") from error
 
-    # OCR 预处理：灰度化 + 对比度增强 + 锐化，提升数学符号识别率
-    image_bytes = _preprocess_for_ocr(image_bytes)
+    # 不额外预处理：RecognizeEduQuestionOcr 自带图像增强，手工预处理可能干扰数学符号识别
+    # image_bytes 保持原始 JPEG 直传
 
     try:
         return _call_aliyun_edu_ocr(image_bytes)
