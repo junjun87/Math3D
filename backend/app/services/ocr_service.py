@@ -48,6 +48,8 @@ def _create_aliyun_client():
         access_key_id=settings.ALIBABA_CLOUD_ACCESS_KEY_ID,
         access_key_secret=settings.ALIBABA_CLOUD_ACCESS_KEY_SECRET,
         endpoint="ocr-api.cn-hangzhou.aliyuncs.com",
+        read_timeout=30000,
+        connect_timeout=10000,
     )
     return Client(config)
 
