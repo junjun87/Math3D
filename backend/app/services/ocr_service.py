@@ -1,6 +1,7 @@
 """阿里云 OCR 服务。图片以原始二进制直传，不依赖本地 OCR 模型。"""
 
 import io
+import json
 import logging
 import os
 
@@ -54,6 +55,16 @@ def _create_aliyun_client():
     return Client(config)
 
 
+def _parse_data_field(raw_response: dict) -> dict:
+    """SDK 返回的 Data 字段可能是 JSON 字符串，需要解析。"""
+    data = raw_response.get("Data", {})
+    if isinstance(data, str):
+        data = json.loads(data)
+    if not isinstance(data, dict):
+        raise OCRServiceError(f"Alibaba OCR response Data is not dict: {type(data).__name__}")
+    return data
+
+
 def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
     """调用教育题目 OCR，优先保留公式识别信息。body 传原始二进制（非 base64 JSON）。"""
     from alibabacloud_ocr_api20210707.models import RecognizeEduQuestionOcrRequest
@@ -63,19 +74,9 @@ def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
         body=io.BytesIO(image_bytes),
     )
     response = _create_aliyun_client().recognize_edu_question_ocr(request)
-    raw = response.body.to_map()
-    logger.info("Edu OCR raw response keys: %s", list(raw.keys()) if isinstance(raw, dict) else type(raw))
-    return _parse_aliyun_edu_response(raw)
+    response_data = _parse_data_field(response.body.to_map())
 
-
-def _parse_aliyun_edu_response(data: dict) -> dict:
-    """将阿里云教育题目 OCR 的响应转换为应用统一格式。"""
-    response_data = data.get("Data", {})
-    logger.info("Edu OCR Data type=%s repr=%s", type(response_data).__name__, repr(response_data)[:200])
-    if not isinstance(response_data, dict):
-        raise OCRServiceError(f"Alibaba Edu OCR response has invalid Data: {type(response_data).__name__}")
-
-    content = (response_data.get("content") or response_data.get("Content") or "").strip()
+    content = response_data.get("content", "").strip()
     words_info = response_data.get("prism_wordsInfo", []) or []
     text_blocks = []
 
@@ -123,14 +124,9 @@ def _call_aliyun_general_ocr(image_bytes: bytes) -> dict:
         body=io.BytesIO(image_bytes),
     )
     response = _create_aliyun_client().recognize_general(request)
-    raw = response.body.to_map()
-    logger.info("General OCR raw response keys: %s, Data type=%s", list(raw.keys()) if isinstance(raw, dict) else type(raw).__name__, type(raw.get("Data", {})).__name__)
-    response_data = raw.get("Data", {})
-    if isinstance(response_data, dict):
-        content = (response_data.get("Content") or response_data.get("content") or "").strip()
-    else:
-        content = ""
-        logger.warning("General OCR Data is not dict: %s", type(response_data).__name__)
+    response_data = _parse_data_field(response.body.to_map())
+
+    content = response_data.get("Content", "").strip()
     if not content:
         raise OCRServiceError("Alibaba General OCR returned no text")
 
