@@ -44,20 +44,22 @@ async def recognize_text(image_path: str) -> dict:
 
 
 def _preprocess_for_ocr(image_bytes: bytes) -> bytes:
-    """OCR 预处理：灰度化、增强对比度、锐化，输出高质量 JPEG。"""
+    """OCR 预处理：轻量增强，保留颜色信息以利数学符号识别。"""
     from PIL import Image, ImageEnhance, ImageFilter
     import io as pil_io
 
     img = Image.open(pil_io.BytesIO(image_bytes))
-    img = img.convert("L")  # 灰度化
-    # 增强对比度 1.5x
-    img = ImageEnhance.Contrast(img).enhance(1.5)
-    # 锐化
+    # 保留 RGB，不转灰度（数学符号的上下标、分数线需要颜色层次）
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    # 轻量对比度增强 1.2x
+    img = ImageEnhance.Contrast(img).enhance(1.2)
+    # 轻量锐化
     img = img.filter(ImageFilter.SHARPEN)
     buf = pil_io.BytesIO()
     img.save(buf, format="JPEG", quality=95)
     result = buf.getvalue()
-    logger.info("OCR preprocess: %s %dx%d -> %d bytes grayscale", img.mode, img.size[0], img.size[1], len(result))
+    logger.info("OCR preprocess: RGB %dx%d -> %d bytes", img.size[0], img.size[1], len(result))
     return result
 
 
