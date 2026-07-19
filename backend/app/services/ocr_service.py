@@ -64,14 +64,15 @@ async def _recognize_via_llm_vision(image_bytes: bytes, image_path: str) -> dict
     b64 = base64.b64encode(image_bytes).decode("ascii")
     ext = os.path.splitext(image_path)[1].lower()
     media_type = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}.get(ext, "image/jpeg")
+    data_url = f"data:{media_type};base64,{b64}"
 
     async with httpx.AsyncClient(timeout=30.0) as client:
+        # 使用 OpenAI 兼容格式（DeepSeek vision 需要此格式而非 Anthropic image block）
         response = await client.post(
-            f"{settings.LLM_API_BASE}/v1/messages",
+            "https://api.deepseek.com/v1/chat/completions",
             headers={
-                "x-api-key": settings.LLM_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
+                "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                "Content-Type": "application/json",
             },
             json={
                 "model": settings.LLM_MODEL,
@@ -79,14 +80,7 @@ async def _recognize_via_llm_vision(image_bytes: bytes, image_path: str) -> dict
                 "messages": [{
                     "role": "user",
                     "content": [
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": media_type,
-                                "data": b64,
-                            },
-                        },
+                        {"type": "image_url", "image_url": {"url": data_url}},
                         {"type": "text", "text": VISION_PROMPT},
                     ],
                 }],
@@ -194,10 +188,17 @@ def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
             "bbox": item.get("pos", []),
         })
 
+    # 合并相邻同类块，避免公式被切成碎片（如 C_1 = 6 切成 $$C_1$$$$=$$$$6$$）
+    merged = []
+    for b in text_blocks:
+        if merged and merged[-1]["is_formula"] == b["is_formula"]:
+            merged[-1]["text"] += " " + b["text"]
+        else:
+            merged.append(dict(b))
     raw_text = "".join(
         f"$${b['text']}$$" if b["is_formula"] else b["text"]
-        for b in text_blocks
-    ) if text_blocks else content
+        for b in merged
+    ) if merged else content
 
     if not raw_text:
         raise OCRServiceError("Alibaba Edu OCR returned no text")
