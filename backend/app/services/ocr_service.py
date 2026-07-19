@@ -15,7 +15,7 @@ class OCRServiceError(RuntimeError):
 
 
 async def recognize_text(image_path: str) -> dict:
-    """调用阿里云 OCR；通过 URL 方式传图（官方推荐，响应更快且自动增强）。"""
+    """调用阿里云 OCR；二进制 body 直传（比 URL 模式少一次下载往返）。"""
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Image file not found: {image_path}")
 
@@ -24,16 +24,18 @@ async def recognize_text(image_path: str) -> dict:
     if not settings.ALIBABA_CLOUD_ACCESS_KEY_ID or not settings.ALIBABA_CLOUD_ACCESS_KEY_SECRET:
         raise OCRServiceError("Alibaba Cloud OCR credentials are not configured")
 
-    filename = os.path.basename(image_path)
-    image_url = f"{settings.SERVER_HOST}/static/uploads/{filename}"
-    logger.info("OCR using URL: %s", image_url)
+    try:
+        with open(image_path, "rb") as f:
+            image_bytes = f.read()
+    except OSError as error:
+        raise OCRServiceError(f"Failed to read image: {error}") from error
 
     try:
-        return _call_aliyun_edu_ocr(image_url)
+        return _call_aliyun_edu_ocr(image_bytes)
     except Exception as education_error:
         logger.warning("Alibaba Edu OCR failed: %s; falling back to General", education_error)
         try:
-            return _call_aliyun_general_ocr(image_url)
+            return _call_aliyun_general_ocr(image_bytes)
         except Exception as general_error:
             raise OCRServiceError("Alibaba Cloud OCR failed") from general_error
 
@@ -62,14 +64,14 @@ def _get_result_data(response) -> dict:
     raise OCRServiceError(f"Unexpected response data type: {type(raw).__name__}")
 
 
-def _call_aliyun_edu_ocr(image_url: str) -> dict:
-    """教育题目 OCR（RecognizeEduQuestionOcr）。URL 模式 + 自动旋转。"""
+def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
+    """教育题目 OCR（RecognizeEduQuestionOcr）。二进制 body + 自动旋转。"""
     from alibabacloud_ocr_api20210707.models import RecognizeEduQuestionOcrRequest
     from alibabacloud_tea_util.models import RuntimeOptions
 
     logger.info("Calling RecognizeEduQuestionOcr")
     request = RecognizeEduQuestionOcrRequest(
-        url=image_url,
+        body=image_bytes,
         need_rotate=True,
     )
     runtime = RuntimeOptions()
@@ -115,13 +117,13 @@ def _call_aliyun_edu_ocr(image_url: str) -> dict:
     }
 
 
-def _call_aliyun_general_ocr(image_url: str) -> dict:
-    """通用 OCR（RecognizeGeneral）。URL 模式回退。"""
+def _call_aliyun_general_ocr(image_bytes: bytes) -> dict:
+    """通用 OCR（RecognizeGeneral）。二进制 body 回退。"""
     from alibabacloud_ocr_api20210707.models import RecognizeGeneralRequest
     from alibabacloud_tea_util.models import RuntimeOptions
 
     logger.info("Calling RecognizeGeneral (fallback)")
-    request = RecognizeGeneralRequest(url=image_url)
+    request = RecognizeGeneralRequest(body=image_bytes)
     runtime = RuntimeOptions()
     response = _create_client().recognize_general_with_options(request, runtime)
     data = _get_result_data(response)
