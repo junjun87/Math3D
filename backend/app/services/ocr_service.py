@@ -44,40 +44,22 @@ async def recognize_text(image_path: str) -> dict:
 
 
 def _preprocess_for_ocr(image_bytes: bytes) -> bytes:
-    """OCR 预处理：自适应二值化（纯黑白），消除噪声，凸显数学符号细节。"""
-    from PIL import Image, ImageFilter, ImageOps
+    """OCR 预处理：自动对比度 + 锐化，轻量快速。"""
+    from PIL import Image, ImageOps, ImageFilter
     import io as pil_io
 
     img = Image.open(pil_io.BytesIO(image_bytes))
     if img.mode != "L":
         img = img.convert("L")
-
-    # 高斯模糊去噪（轻度，避免抹掉小符号）
-    img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
     # 自动对比度拉伸
-    img = ImageOps.autocontrast(img, cutoff=2)
-    # 自适应二值化：分块计算阈值，处理不均匀光照
-    img = _adaptive_threshold(img, block_size=31, c=8)
+    img = ImageOps.autocontrast(img, cutoff=1)
+    # 轻度锐化
+    img = img.filter(ImageFilter.SHARPEN)
     buf = pil_io.BytesIO()
-    img.save(buf, format="PNG")
+    img.save(buf, format="JPEG", quality=95)
     result = buf.getvalue()
-    logger.info("OCR preprocess: binary %dx%d -> %d bytes", img.size[0], img.size[1], len(result))
+    logger.info("OCR preprocess: L %dx%d -> %d bytes", img.size[0], img.size[1], len(result))
     return result
-
-
-def _adaptive_threshold(img, block_size=31, c=10):
-    """自适应二值化：BoxBlur 近似邻域均值，numpy 快速阈值比较。"""
-    import numpy as np
-    from PIL import ImageFilter
-
-    # PIL BoxBlur 得到局部均值
-    radius = max(block_size // 2, 1)
-    blurred = img.filter(ImageFilter.BoxBlur(radius))
-    arr = np.array(img, dtype=np.float32)
-    blur_arr = np.array(blurred, dtype=np.float32)
-    # 像素 > 局部均值 - c → 白，否则黑
-    binary = np.where(arr >= (blur_arr - c), 255, 0).astype(np.uint8)
-    return Image.fromarray(binary)
 
 
 def _create_client():
