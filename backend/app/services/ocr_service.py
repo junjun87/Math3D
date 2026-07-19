@@ -1,7 +1,6 @@
-"""阿里云 OCR 服务。图片以 Base64 直传，不依赖本地 OCR 模型。"""
+"""阿里云 OCR 服务。图片以原始二进制直传，不依赖本地 OCR 模型。"""
 
-import base64
-import json
+import io
 import logging
 import os
 
@@ -16,26 +15,27 @@ class OCRServiceError(RuntimeError):
 
 
 async def recognize_text(image_path: str) -> dict:
-    """调用阿里云 OCR；本地服务器只负责读取和编码图片。"""
+    """调用阿里云 OCR；本地服务器只负责读取图片二进制数据。"""
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Image file not found: {image_path}")
 
     logger.info("OCR image: %s, size=%d bytes", image_path, os.path.getsize(image_path))
-    try:
-        with open(image_path, "rb") as image_file:
-            image_base64 = base64.b64encode(image_file.read()).decode("utf-8")
-    except OSError as error:
-        raise OCRServiceError(f"Failed to read/encode image: {error}") from error
 
     if not settings.ALIBABA_CLOUD_ACCESS_KEY_ID or not settings.ALIBABA_CLOUD_ACCESS_KEY_SECRET:
         raise OCRServiceError("Alibaba Cloud OCR credentials are not configured")
 
     try:
-        return _call_aliyun_edu_ocr(image_base64)
+        with open(image_path, "rb") as image_file:
+            image_bytes = image_file.read()
+    except OSError as error:
+        raise OCRServiceError(f"Failed to read image: {error}") from error
+
+    try:
+        return _call_aliyun_edu_ocr(image_bytes)
     except Exception as education_error:
         logger.warning("Alibaba Edu OCR failed: %s; falling back to General", education_error)
         try:
-            return _call_aliyun_general_ocr(image_base64)
+            return _call_aliyun_general_ocr(image_bytes)
         except Exception as general_error:
             raise OCRServiceError("Alibaba Cloud OCR failed") from general_error
 
@@ -54,13 +54,13 @@ def _create_aliyun_client():
     return Client(config)
 
 
-def _call_aliyun_edu_ocr(image_base64: str) -> dict:
-    """调用教育题目 OCR，优先保留公式识别信息。"""
+def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
+    """调用教育题目 OCR，优先保留公式识别信息。body 传原始二进制（非 base64 JSON）。"""
     from alibabacloud_ocr_api20210707.models import RecognizeEduQuestionOcrRequest
 
     logger.info("Calling Alibaba RecognizeEduQuestionOcr")
     request = RecognizeEduQuestionOcrRequest(
-        body=json.dumps({"ImageData": image_base64}),
+        body=io.BytesIO(image_bytes),
     )
     response = _create_aliyun_client().recognize_edu_question_ocr(request)
     return _parse_aliyun_edu_response(response.body.to_map())
@@ -111,13 +111,13 @@ def _parse_aliyun_edu_response(data: dict) -> dict:
     }
 
 
-def _call_aliyun_general_ocr(image_base64: str) -> dict:
-    """教育题目 OCR 无法识别时，使用阿里云通用 OCR 作为云端回退。"""
+def _call_aliyun_general_ocr(image_bytes: bytes) -> dict:
+    """教育题目 OCR 无法识别时，使用阿里云通用 OCR 作为云端回退。body 传原始二进制。"""
     from alibabacloud_ocr_api20210707.models import RecognizeGeneralRequest
 
     logger.info("Calling Alibaba RecognizeGeneral")
     request = RecognizeGeneralRequest(
-        body=json.dumps({"ImageData": image_base64}),
+        body=io.BytesIO(image_bytes),
     )
     response = _create_aliyun_client().recognize_general(request)
     response_data = response.body.to_map().get("Data", {})
