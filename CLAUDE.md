@@ -14,7 +14,7 @@ Math3D 是一个**拍照搜题 + AI 解析 + 交互课件** Web 应用，参照 
 | 3D 渲染 | Three.js (react-three-fiber) |
 | 2D/公式 | Canvas + KaTeX |
 | 后端 | Python FastAPI + Uvicorn |
-| OCR | PaddleOCR (PP-OCRv5)，独立容器 |
+| OCR | 阿里云 OCR API (RecognizeEduQuestionOcr + RecognizeGeneral fallback) |
 | LLM | Claude API / OpenAI |
 | 符号计算 | SymPy |
 | 数据库 | PostgreSQL 16 + Redis 7 |
@@ -37,10 +37,6 @@ uvicorn app.main:app --reload --port 8000
 cd frontend
 npm install
 npm run dev                              # 开发服务器 :5173
-
-# ======== OCR 服务 ========
-cd ml_service
-uvicorn app.main:app --port 8001
 
 # ======== Celery Worker ========
 cd backend
@@ -65,7 +61,6 @@ Math3D/
 │       ├── kernels/   # SymPy 计算内核
 │       │   └── geometry/  # 立体几何 (已实现核心)
 │       └── services/  # OCR/LLM/Render 服务层
-├── ml_service/        # PaddleOCR 独立推理容器
 └── docker-compose.yml
 ```
 
@@ -117,7 +112,7 @@ GET  /api/v1/lessons/{id}/download # 下载离线 HTML
 - [x] Phase 1 MVP: 项目骨架、Docker 环境、前后端基础框架
 - [x] 立体几何计算内核（正方体线面角等核心题型）
 - [x] 3D 课件 HTML 模板（Three.js，离线可用）
-- [x] OCR 服务容器（PaddleOCR，含 Mock 模式）
+- [x] 阿里云 OCR 集成（RecognizeEduQuestionOcr + General 回退）
 - [x] LLM 题目结构化集成（DeepSeek + 多学科 prompt）
 - [x] Celery 异步任务链联调（端到端验证通过）
 - [x] Phase 2: 多学科 LLM 支持（解析几何/代数/化学识别 + 通用课件渲染）

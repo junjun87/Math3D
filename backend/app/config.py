@@ -17,9 +17,6 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # OCR Service
-    OCR_SERVICE_URL: str = "http://localhost:8001"
-
     # LLM
     LLM_API_KEY: str = ""
     LLM_API_BASE: str = "https://api.anthropic.com"

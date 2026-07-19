@@ -51,7 +51,7 @@ celery_app.conf.update(
 @celery_app.task(bind=True, name="ocr_recognize")
 def ocr_recognize(self, problem_id: str) -> dict:
     """
-    OCR 识别任务：调用 ml_service 识别上传的图片中的文字。
+    OCR 识别任务：调用阿里云 OCR API 识别上传的图片中的文字。
     更新 Problem.ocr_raw_text 和 status。
     """
     from app.models import Problem
@@ -73,7 +73,7 @@ def ocr_recognize(self, problem_id: str) -> dict:
             if not os.path.exists(image_path):
                 raise FileNotFoundError(f"Image file not found: {image_path}")
 
-            # 调用阿里云 OCR（传图片路径，用 ImageURL 方式）
+            # 调用阿里云 OCR（Base64 直传）
             from app.services.ocr_service import recognize_text
             ocr_data = asyncio.run(recognize_text(image_path))
             raw_text = ocr_data.get("raw_text", "")

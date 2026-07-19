@@ -19,7 +19,7 @@ docker compose up -d           # 启动全部服务
 
 | 功能 | 说明 |
 |------|------|
-| 📷 拍照搜题 | 手机拍照 → PaddleOCR 识别文字 |
+| 📷 拍照搜题 | 手机拍照 → 阿里云 OCR 识别文字 |
 | ⌨️ 文字输入 | 直接输入题目，跳过 OCR |
 | 🧠 AI 结构化 | DeepSeek LLM 自动识别科目/题型/已知条件 |
 | 🔢 精确计算 | SymPy 符号引擎，输出精确值（1/3 而非 0.333） |
@@ -55,7 +55,7 @@ docker compose up -d           # 启动全部服务
 | 后端 | Python FastAPI + Celery |
 | AI | DeepSeek API（兼容 Anthropic 格式） |
 | 计算引擎 | SymPy |
-| OCR | PaddleOCR（独立容器） |
+| OCR | 阿里云 OCR API |
 | 数据库 | PostgreSQL 16 + Redis 7 |
 | 部署 | Docker Compose |
 
@@ -69,7 +69,6 @@ Math3D/
 │       ├── api/       # 路由 (upload, problems, lessons, users)
 │       ├── kernels/   # 计算内核 (geometry/analytic/algebra/chemistry)
 │       └── services/  # LLM/Render 服务
-├── ml_service/        # PaddleOCR 独立推理容器
 └── docker-compose.yml
 ```
 
