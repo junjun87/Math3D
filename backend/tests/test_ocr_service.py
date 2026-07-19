@@ -1,4 +1,4 @@
-from app.services.ocr_service import OCRServiceError, _get_result_data, _extract_text_from_response
+from app.services.ocr_service import OCRServiceError, _get_result_data
 
 
 def test_get_result_data_from_json_string():
@@ -23,34 +23,6 @@ def test_get_result_data_invalid_raises():
         data = 123
     try:
         _get_result_data(MockBody())
-    except OCRServiceError:
-        pass
-    else:
-        raise AssertionError("Should raise OCRServiceError")
-
-
-def test_extract_text_anthropic_format():
-    """Anthropic 格式: content[0].text"""
-    text = _extract_text_from_response({"content": [{"type": "text", "text": "hello"}]})
-    assert text == "hello"
-
-
-def test_extract_text_openai_format():
-    """OpenAI 格式: choices[0].message.content"""
-    text = _extract_text_from_response({"choices": [{"message": {"content": "world"}}]})
-    assert text == "world"
-
-
-def test_extract_text_deepseek_format():
-    """DeepSeek 兼容格式: content[0].text (无外层 type)"""
-    text = _extract_text_from_response({"content": [{"text": "x=1"}]})
-    assert text == "x=1"
-
-
-def test_extract_text_unknown_raises():
-    """无法识别的格式应抛异常。"""
-    try:
-        _extract_text_from_response({"unknown": "format"})
     except OCRServiceError:
         pass
     else:

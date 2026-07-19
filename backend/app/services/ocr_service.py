@@ -1,20 +1,13 @@
-"""题目识别服务。优先 DeepSeek V4 视觉识图，失败回退阿里云 OCR。"""
+"""阿里云 OCR 题目识别服务。"""
 
-import base64
 import json
 import logging
 import os
 
-import httpx
 from app.config import get_settings
 
 logger = logging.getLogger("ocr_service")
 settings = get_settings()
-
-VISION_PROMPT = (
-    "提取图中题目的完整文字，保留所有数学符号和公式。"
-    "只输出题目原文，不要任何解释或额外文字。"
-)
 
 
 class OCRServiceError(RuntimeError):
@@ -22,28 +15,20 @@ class OCRServiceError(RuntimeError):
 
 
 async def recognize_text(image_path: str) -> dict:
-    """识别图片中的题目文字。优先 LLM 视觉，失败回退阿里云 OCR。"""
+    """识别图片中的题目文字（阿里云 OCR）。"""
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Image file not found: {image_path}")
 
     logger.info("OCR image: %s, size=%d bytes", image_path, os.path.getsize(image_path))
+
+    if not settings.ALIBABA_CLOUD_ACCESS_KEY_ID or not settings.ALIBABA_CLOUD_ACCESS_KEY_SECRET:
+        raise OCRServiceError("Alibaba Cloud OCR credentials not configured")
 
     try:
         with open(image_path, "rb") as f:
             image_bytes = f.read()
     except OSError as error:
         raise OCRServiceError(f"Failed to read image: {error}") from error
-
-    # 1) 优先 DeepSeek V4 视觉识图（数学符号识别更准）
-    if settings.LLM_API_KEY:
-        try:
-            return await _recognize_via_llm_vision(image_bytes, image_path)
-        except Exception as vision_error:
-            logger.warning("LLM Vision failed: %s; falling back to Alibaba OCR", vision_error)
-
-    # 2) 回退阿里云 OCR
-    if not settings.ALIBABA_CLOUD_ACCESS_KEY_ID or not settings.ALIBABA_CLOUD_ACCESS_KEY_SECRET:
-        raise OCRServiceError("No OCR method available: configure LLM_API_KEY or Alibaba Cloud credentials")
 
     ocr_bytes = _preprocess_for_ocr(image_bytes)
     try:
@@ -54,71 +39,6 @@ async def recognize_text(image_path: str) -> dict:
             return _call_aliyun_general_ocr(ocr_bytes)
         except Exception as gen_error:
             raise OCRServiceError("All OCR methods failed") from gen_error
-
-
-# ─── LLM 视觉识图 ───────────────────────────────────────────────
-
-async def _recognize_via_llm_vision(image_bytes: bytes, image_path: str) -> dict:
-    """DeepSeek V4 多模态识图：直接看图片提取题目文字。"""
-    logger.info("Calling LLM Vision for image recognition")
-    b64 = base64.b64encode(image_bytes).decode("ascii")
-    ext = os.path.splitext(image_path)[1].lower()
-    media_type = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp"}.get(ext, "image/jpeg")
-    data_url = f"data:{media_type};base64,{b64}"
-
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        # 使用 OpenAI 兼容格式（DeepSeek vision 需要此格式而非 Anthropic image block）
-        response = await client.post(
-            "https://api.deepseek.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.LLM_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": settings.LLM_MODEL,
-                "max_tokens": 512,
-                "messages": [{
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": data_url}},
-                        {"type": "text", "text": VISION_PROMPT},
-                    ],
-                }],
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
-
-    raw_text = _extract_text_from_response(data)
-    logger.info("LLM Vision result: %s", raw_text[:200])
-    return {
-        "raw_text": raw_text,
-        "text_blocks": [{"text": raw_text, "confidence": 0.99, "bbox": []}],
-        "confidence": 0.99,
-    }
-
-
-def _extract_text_from_response(data: dict) -> str:
-    """兼容 Anthropic / OpenAI / DeepSeek 多种响应格式。"""
-    # Anthropic: content[0].text
-    try:
-        return data["content"][0]["text"]
-    except (KeyError, IndexError, TypeError):
-        pass
-    # OpenAI: choices[0].message.content
-    try:
-        return data["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError):
-        pass
-    # DeepSeek 兼容
-    try:
-        items = data.get("content", [])
-        if items and isinstance(items[0], dict):
-            if "text" in items[0]:
-                return items[0]["text"]
-    except (IndexError, TypeError):
-        pass
-    raise OCRServiceError(f"Unknown vision response: {json.dumps(data, ensure_ascii=False)[:300]}")
 
 
 # ─── 阿里云 OCR（fallback）────────────────────────────────────
