@@ -91,6 +91,8 @@ services:
       - ./ml_service/app:/app
     environment:
       - OCR_LANG=${OCR_LANG:-ch}
+    profiles:
+      - local-ocr
 
   # ============ 前端开发服务器 ============
   frontend:

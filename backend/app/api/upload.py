@@ -1,4 +1,5 @@
 import uuid
+import logging
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pathlib import Path
@@ -10,6 +11,8 @@ from app.config import get_settings
 from app.database import get_db
 from app.models import Problem
 from app.utils.image_utils import create_thumbnail, compress_image
+
+logger = logging.getLogger("upload")
 
 router = APIRouter()
 settings = get_settings()
@@ -37,12 +40,15 @@ async def upload_problem_image(
     if file_size_mb > settings.MAX_UPLOAD_SIZE_MB:
         raise HTTPException(400, f"File too large: {file_size_mb:.1f}MB > {settings.MAX_UPLOAD_SIZE_MB}MB")
 
-    # 统一转为 JPEG 格式保存（阿里云 OCR 不支持 HEIC 等格式）
+    # 统一转为 JPEG 格式保存（阿里云 OCR 需要 JPEG/PNG 等标准格式）
     try:
         from PIL import Image
         import io as pil_io
         img = Image.open(pil_io.BytesIO(contents))
-        if img.mode in ("RGBA", "P", "LA"):
+        original_mode = img.mode
+        original_size = img.size
+        # 统一转 RGB
+        if img.mode in ("RGBA", "P", "LA", "CMYK"):
             img = img.convert("RGB")
         elif img.mode != "RGB":
             img = img.convert("RGB")
@@ -57,14 +63,31 @@ async def upload_problem_image(
         ext = ".jpg"
         filename = f"{uuid.uuid4()}{ext}"
         filepath = os.path.join(settings.UPLOAD_DIR, filename)
-    except Exception:
-        ext = Path(file.filename).suffix or ".jpg"
-        filename = f"{uuid.uuid4()}{ext}"
-        filepath = os.path.join(settings.UPLOAD_DIR, filename)
+        logger.info(
+            "Image converted: mode=%s size=%s -> JPEG %s, %d bytes",
+            original_mode, original_size, img.size, len(contents)
+        )
+    except Exception as e:
+        logger.error("Image conversion failed: %s", e)
+        raise HTTPException(
+            400,
+            detail=f"Cannot process this image format. Please upload JPEG or PNG. "
+                   f"(Reason: {e})",
+        )
 
     async with aiofiles.open(filepath, "wb") as f:
         await f.write(contents)
         await f.flush()
+
+    # 验证写入的文件是有效图片，防止损坏数据传播到 OCR
+    try:
+        from PIL import Image
+        import io as pil_io
+        Image.open(pil_io.BytesIO(contents)).verify()
+    except Exception as e:
+        logger.error("Saved file failed validation: %s", e)
+        os.remove(filepath)
+        raise HTTPException(400, detail="Uploaded image is corrupted or invalid")
 
     # 创建缩略图（失败不影响上传流程）
     thumb_filename = f"thumb_{filename}"
