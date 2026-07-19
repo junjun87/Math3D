@@ -176,51 +176,63 @@ async def structure_problem(ocr_text: str) -> dict:
     Returns:
         结构化题目 dict，可直接传给计算内核
     """
-    # 如果没有配置 API key，使用 mock 模式
     if not settings.LLM_API_KEY:
         logger.warning("LLM_API_KEY not configured, using mock mode")
         return _mock_structure(ocr_text)
 
     raw_data = None
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            response = await client.post(
-                f"{settings.LLM_API_BASE}/v1/messages",
-                headers={
-                    "x-api-key": settings.LLM_API_KEY,
-                    "anthropic-version": "2023-06-01",
-                    "content-type": "application/json",
-                },
-                json={
-                    "model": settings.LLM_MODEL,
-                    "max_tokens": 1024,
-                    "system": SYSTEM_PROMPT,
-                    "messages": [
-                        {"role": "user", "content": ocr_text}
-                    ],
-                },
-            )
-            response.raise_for_status()
-            raw_data = response.json()
+    content = None
+    for attempt in range(2):
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{settings.LLM_API_BASE}/v1/messages",
+                    headers={
+                        "x-api-key": settings.LLM_API_KEY,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": settings.LLM_MODEL,
+                        "max_tokens": 1024,
+                        "system": SYSTEM_PROMPT,
+                        "messages": [
+                            {"role": "user", "content": ocr_text}
+                        ],
+                    },
+                )
+                response.raise_for_status()
+                raw_data = response.json()
 
-            # 提取 LLM 返回的文本（兼容多种响应格式）
             content = _extract_text_from_response(raw_data)
+            logger.info("LLM raw response (attempt %d): %s", attempt + 1, content[:300])
 
-            # 尝试从响应中提取 JSON（可能包裹在 ```json ``` 中）
             json_str = _extract_json(content)
             structured = json.loads(json_str)
-            logger.info(f"LLM structured problem: {structured.get('body_type')} / {structured.get('target', {}).get('type')}")
+            logger.info("LLM structured: subject=%s body=%s type=%s",
+                        structured.get("subject"), structured.get("body_type"),
+                        structured.get("target", {}).get("type"))
             return structured
 
-    except httpx.HTTPError as e:
-        logger.error(f"LLM API request failed: {e}")
-        return _mock_structure(ocr_text)
-    except (json.JSONDecodeError, KeyError, IndexError) as e:
-        logger.error(
-            f"Failed to parse LLM response: {e}, "
-            f"raw_sample: {json.dumps(raw_data, ensure_ascii=False)[:400] if raw_data else 'N/A'}"
-        )
-        return _mock_structure(ocr_text)
+        except (json.JSONDecodeError, KeyError, IndexError) as e:
+            logger.warning("LLM parse failed (attempt %d): %s", attempt + 1, e)
+            if attempt == 0:
+                # 重试，prompt 加强调
+                ocr_text = f"请严格按JSON格式输出，不要markdown包裹：\n\n{ocr_text}"
+                continue
+        except httpx.HTTPError as e:
+            logger.error("LLM API request failed (attempt %d): %s", attempt + 1, e)
+            break
+
+    # 两次都失败，记录详细信息后回退 mock
+    logger.error(
+        "LLM structure failed after 2 attempts. "
+        "OCR text preview: %s... | "
+        "Raw response: %s",
+        ocr_text[:200],
+        json.dumps(raw_data, ensure_ascii=False)[:500] if raw_data else "N/A"
+    )
+    return _mock_structure(ocr_text)
 
 
 def _extract_json(text: str) -> str:

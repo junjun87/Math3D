@@ -123,9 +123,34 @@ def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
     if not raw_text:
         raise OCRServiceError("Alibaba Edu OCR returned no text")
 
+    raw_text = _clean_ocr_text(raw_text)
     confidence = sum(b["confidence"] for b in text_blocks) / len(text_blocks) if text_blocks else 0.99
     logger.info("Edu OCR: %d blocks, conf=%.3f, text=%s", len(text_blocks), confidence, raw_text[:200])
     return {"raw_text": raw_text, "text_blocks": text_blocks, "confidence": round(confidence, 4)}
+
+
+def _clean_ocr_text(text: str) -> str:
+    """清理 OCR 文本杂质：公式内多余空格、分离的 LaTeX 块合并。"""
+    import re
+
+    # 1. 修复公式块内多余空格：$$a b c$$ → $$abc$$（但保留中文和标点前后的空格）
+    def _fix_formula_spaces(m):
+        content = m.group(1)
+        # 去掉操作符周围的空格：A B C → ABC，但保留语义空格
+        content = re.sub(r'(?<=[A-Za-z0-9])\s+(?=[A-Za-z0-9_{}\\])', '', content)
+        content = re.sub(r'(?<=[A-Za-z0-9_{}])\s+(?=[+\-=×÷<>])', '', content)
+        content = re.sub(r'(?<=[+\-=×÷<>])\s+(?=[A-Za-z0-9])', '', content)
+        return f'$${content}$$'
+
+    text = re.sub(r'\$\$(.+?)\$\$', _fix_formula_spaces, text)
+
+    # 2. 合并相邻的 $$...$$ 块：$$A$$$$B$$ → $$AB$$
+    text = re.sub(r'\$\$\s*\$\$', '', text)
+
+    # 3. 修复常见 OCR 错误
+    text = text.replace('$$$', '$$')  # 三个 $ → 两个 $
+
+    return text
 
 
 def _call_aliyun_general_ocr(image_bytes: bytes) -> dict:
