@@ -15,7 +15,7 @@ class OCRServiceError(RuntimeError):
 
 
 async def recognize_text(image_path: str) -> dict:
-    """调用阿里云 OCR；二进制 body 直传（比 URL 模式少一次下载往返）。"""
+    """调用阿里云 OCR；二进制 body 直传，带图像预处理提升准确率。"""
     if not os.path.exists(image_path):
         raise FileNotFoundError(f"Image file not found: {image_path}")
 
@@ -30,6 +30,9 @@ async def recognize_text(image_path: str) -> dict:
     except OSError as error:
         raise OCRServiceError(f"Failed to read image: {error}") from error
 
+    # OCR 预处理：灰度化 + 对比度增强 + 锐化，提升数学符号识别率
+    image_bytes = _preprocess_for_ocr(image_bytes)
+
     try:
         return _call_aliyun_edu_ocr(image_bytes)
     except Exception as education_error:
@@ -38,6 +41,24 @@ async def recognize_text(image_path: str) -> dict:
             return _call_aliyun_general_ocr(image_bytes)
         except Exception as general_error:
             raise OCRServiceError("Alibaba Cloud OCR failed") from general_error
+
+
+def _preprocess_for_ocr(image_bytes: bytes) -> bytes:
+    """OCR 预处理：灰度化、增强对比度、锐化，输出高质量 JPEG。"""
+    from PIL import Image, ImageEnhance, ImageFilter
+    import io as pil_io
+
+    img = Image.open(pil_io.BytesIO(image_bytes))
+    img = img.convert("L")  # 灰度化
+    # 增强对比度 1.5x
+    img = ImageEnhance.Contrast(img).enhance(1.5)
+    # 锐化
+    img = img.filter(ImageFilter.SHARPEN)
+    buf = pil_io.BytesIO()
+    img.save(buf, format="JPEG", quality=95)
+    result = buf.getvalue()
+    logger.info("OCR preprocess: %s %dx%d -> %d bytes grayscale", img.mode, img.size[0], img.size[1], len(result))
+    return result
 
 
 def _create_client():

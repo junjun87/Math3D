@@ -40,28 +40,28 @@ async def upload_problem_image(
     if file_size_mb > settings.MAX_UPLOAD_SIZE_MB:
         raise HTTPException(400, f"File too large: {file_size_mb:.1f}MB > {settings.MAX_UPLOAD_SIZE_MB}MB")
 
-    # 统一转为 JPEG 格式保存（PNG 太大导致 OCR API 超时）
+    # 统一转为 JPEG 格式保存
     try:
         from PIL import Image
         import io as pil_io
         img = Image.open(pil_io.BytesIO(contents))
         original_mode = img.mode
         original_size = img.size
-        # 统一转 RGB，清除 EXIF/元数据（避免阿里云 OCR 兼容问题）
+        # 统一转 RGB，清除 EXIF/元数据
         if img.mode in ("RGBA", "P", "LA", "CMYK"):
             img = img.convert("RGB")
         elif img.mode != "RGB":
             img = img.convert("RGB")
-        # 限制 1600px
+        # 限制 2048px（给 OCR 保留足够细节）
         w, h = img.size
-        if max(w, h) > 1600:
-            ratio = 1600 / max(w, h)
+        if max(w, h) > 2048:
+            ratio = 2048 / max(w, h)
             img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
         # 重建无元数据的干净图像
         clean = Image.new("RGB", img.size, (255, 255, 255))
         clean.paste(img)
         jpg_buf = pil_io.BytesIO()
-        clean.save(jpg_buf, format="JPEG", quality=85, optimize=True)
+        clean.save(jpg_buf, format="JPEG", quality=92, optimize=True)
         contents = jpg_buf.getvalue()
         ext = ".jpg"
         filename = f"{uuid.uuid4()}{ext}"
