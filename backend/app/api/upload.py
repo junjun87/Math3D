@@ -40,7 +40,7 @@ async def upload_problem_image(
     if file_size_mb > settings.MAX_UPLOAD_SIZE_MB:
         raise HTTPException(400, f"File too large: {file_size_mb:.1f}MB > {settings.MAX_UPLOAD_SIZE_MB}MB")
 
-    # 统一转为 JPEG 格式保存（阿里云 OCR 需要 JPEG/PNG 等标准格式）
+    # 统一转为 PNG 格式保存（阿里云 OCR 对 PNG 兼容性最好）
     try:
         from PIL import Image
         import io as pil_io
@@ -58,13 +58,13 @@ async def upload_problem_image(
             ratio = 2048 / max(w, h)
             img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
         jpg_buf = pil_io.BytesIO()
-        img.save(jpg_buf, format="JPEG", quality=85)
+        img.save(jpg_buf, format="PNG")
         contents = jpg_buf.getvalue()
-        ext = ".jpg"
+        ext = ".png"
         filename = f"{uuid.uuid4()}{ext}"
         filepath = os.path.join(settings.UPLOAD_DIR, filename)
         logger.info(
-            "Image converted: mode=%s size=%s -> JPEG %s, %d bytes",
+            "Image converted: mode=%s size=%s -> PNG %s, %d bytes",
             original_mode, original_size, img.size, len(contents)
         )
     except Exception as e:

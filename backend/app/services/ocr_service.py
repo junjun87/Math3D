@@ -58,7 +58,7 @@ def _call_aliyun_edu_ocr(image_base64: str) -> dict:
 
     logger.info("Calling Alibaba RecognizeEduQuestionOcr")
     request = RecognizeEduQuestionOcrRequest(
-        body=json.dumps({"ImageData": image_base64}, ensure_ascii=False),
+        body=json.dumps({"ImageData": image_base64}),
     )
     response = _create_aliyun_client().recognize_edu_question_ocr(request)
     return _parse_aliyun_edu_response(response.body.to_map())
@@ -115,7 +115,7 @@ def _call_aliyun_general_ocr(image_base64: str) -> dict:
 
     logger.info("Calling Alibaba RecognizeGeneral")
     request = RecognizeGeneralRequest(
-        body=json.dumps({"ImageData": image_base64}, ensure_ascii=False),
+        body=json.dumps({"ImageData": image_base64}),
     )
     response = _create_aliyun_client().recognize_general(request)
     response_data = response.body.to_map().get("Data", {})
