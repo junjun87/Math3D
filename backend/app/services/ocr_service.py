@@ -63,7 +63,9 @@ def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
         body=io.BytesIO(image_bytes),
     )
     response = _create_aliyun_client().recognize_edu_question_ocr(request)
-    return _parse_aliyun_edu_response(response.body.to_map())
+    raw = response.body.to_map()
+    logger.info("Edu OCR raw response keys: %s", list(raw.keys()) if isinstance(raw, dict) else type(raw))
+    return _parse_aliyun_edu_response(raw)
 
 
 def _parse_aliyun_edu_response(data: dict) -> dict:
