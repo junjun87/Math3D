@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     # Alibaba Cloud OCR
     ALIBABA_CLOUD_ACCESS_KEY_ID: str = ""
     ALIBABA_CLOUD_ACCESS_KEY_SECRET: str = ""
+    SERVER_HOST: str = "http://59.110.93.243:8000"  # OCR API 通过 URL 下载图片
 
     # File Storage
     UPLOAD_DIR: str = "./uploads"
