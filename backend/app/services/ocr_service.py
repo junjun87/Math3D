@@ -30,8 +30,8 @@ async def recognize_text(image_path: str) -> dict:
     except OSError as error:
         raise OCRServiceError(f"Failed to read image: {error}") from error
 
-    # 不额外预处理：RecognizeEduQuestionOcr 自带图像增强，手工预处理可能干扰数学符号识别
-    # image_bytes 保持原始 JPEG 直传
+    # OCR 预处理：自适应二值化（黑/白），消除光照不均和噪声，保留数学符号细节
+    image_bytes = _preprocess_for_ocr(image_bytes)
 
     try:
         return _call_aliyun_edu_ocr(image_bytes)
@@ -44,23 +44,40 @@ async def recognize_text(image_path: str) -> dict:
 
 
 def _preprocess_for_ocr(image_bytes: bytes) -> bytes:
-    """OCR 预处理：轻量增强，保留颜色信息以利数学符号识别。"""
-    from PIL import Image, ImageEnhance, ImageFilter
+    """OCR 预处理：自适应二值化（纯黑白），消除噪声，凸显数学符号细节。"""
+    from PIL import Image, ImageFilter, ImageOps
     import io as pil_io
 
     img = Image.open(pil_io.BytesIO(image_bytes))
-    # 保留 RGB，不转灰度（数学符号的上下标、分数线需要颜色层次）
-    if img.mode != "RGB":
-        img = img.convert("RGB")
-    # 轻量对比度增强 1.2x
-    img = ImageEnhance.Contrast(img).enhance(1.2)
-    # 轻量锐化
-    img = img.filter(ImageFilter.SHARPEN)
+    if img.mode != "L":
+        img = img.convert("L")
+
+    # 高斯模糊去噪（轻度，避免抹掉小符号）
+    img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
+    # 自动对比度拉伸
+    img = ImageOps.autocontrast(img, cutoff=2)
+    # 自适应二值化：分块计算阈值，处理不均匀光照
+    img = _adaptive_threshold(img, block_size=31, c=8)
     buf = pil_io.BytesIO()
-    img.save(buf, format="JPEG", quality=95)
+    img.save(buf, format="PNG")
     result = buf.getvalue()
-    logger.info("OCR preprocess: RGB %dx%d -> %d bytes", img.size[0], img.size[1], len(result))
+    logger.info("OCR preprocess: binary %dx%d -> %d bytes", img.size[0], img.size[1], len(result))
     return result
+
+
+def _adaptive_threshold(img, block_size=31, c=10):
+    """自适应二值化：BoxBlur 近似邻域均值，numpy 快速阈值比较。"""
+    import numpy as np
+    from PIL import ImageFilter
+
+    # PIL BoxBlur 得到局部均值
+    radius = max(block_size // 2, 1)
+    blurred = img.filter(ImageFilter.BoxBlur(radius))
+    arr = np.array(img, dtype=np.float32)
+    blur_arr = np.array(blurred, dtype=np.float32)
+    # 像素 > 局部均值 - c → 白，否则黑
+    binary = np.where(arr >= (blur_arr - c), 255, 0).astype(np.uint8)
+    return Image.fromarray(binary)
 
 
 def _create_client():
