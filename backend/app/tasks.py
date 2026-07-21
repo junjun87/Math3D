@@ -82,6 +82,11 @@ def ocr_recognize(self, problem_id: str) -> dict:
             # 更新数据库
             problem.ocr_raw_text = raw_text
             problem.ocr_confidence = confidence
+            problem.ocr_result = {
+                "blocks": ocr_data.get("text_blocks", []),
+                "source": ocr_data.get("source", "unknown"),
+                "review_required": ocr_data.get("review_required", False),
+            }
             problem.status = "ocr_done"
 
             logger.info(f"OCR done for problem {problem_id}: confidence={confidence:.3f}, "
@@ -92,6 +97,7 @@ def ocr_recognize(self, problem_id: str) -> dict:
                 "status": "ocr_done",
                 "ocr_raw_text": raw_text,
                 "ocr_confidence": confidence,
+                "ocr_result": problem.ocr_result,
             }
 
         except FileNotFoundError as e:

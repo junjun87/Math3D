@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "./uploads"
     LESSON_DIR: str = "./lessons"
     MAX_UPLOAD_SIZE_MB: int = 10
+    OCR_MAX_IMAGE_DIMENSION: int = 4096
 
     # CORS
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://localhost:3000", "http://59.110.93.243:5173", "http://59.110.93.243"]

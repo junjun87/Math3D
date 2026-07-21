@@ -3,7 +3,7 @@
  * 封装所有后端 API 请求。
  */
 import axios from "axios";
-import type { ProblemDetail, LessonData, ProblemSummary } from "../types/api";
+import type { ProblemDetail, LessonData, ProblemSummary, OcrResult } from "../types/api";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api/v1";
 
@@ -45,13 +45,7 @@ export async function getProblem(problemId: string): Promise<ProblemDetail> {
   return data;
 }
 
-export async function getOcrResult(problemId: string): Promise<{
-  problem_id: string;
-  status: string;
-  ocr_raw_text: string | null;
-  ocr_confidence: number | null;
-  error_message: string | null;
-}> {
+export async function getOcrResult(problemId: string): Promise<OcrResult> {
   const { data } = await client.get(`/problems/${problemId}/ocr`);
   return data;
 }

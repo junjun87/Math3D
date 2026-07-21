@@ -34,6 +34,7 @@ class Problem(Base):
     image_thumbnail_url: Mapped[str] = mapped_column(Text, nullable=True)
     ocr_raw_text: Mapped[str] = mapped_column(Text, nullable=True)
     ocr_confidence: Mapped[float] = mapped_column(Float, nullable=True)
+    ocr_result: Mapped[dict] = mapped_column(JSONB, nullable=True)
     structured_json: Mapped[dict] = mapped_column(JSONB, nullable=True)
     status: Mapped[str] = mapped_column(
         String(50), default="uploaded",

@@ -27,6 +27,27 @@ export interface ProblemDetail extends ProblemSummary {
   ocr_confidence: number | null;
 }
 
+export interface OcrBlock {
+  text: string;
+  confidence: number;
+  is_formula: boolean;
+  bbox: unknown[];
+  bbox_rect: [number, number, number, number] | null;
+  line: number;
+  risk_flags: string[];
+}
+
+export interface OcrResult {
+  problem_id: string;
+  status: string;
+  ocr_raw_text: string | null;
+  ocr_confidence: number | null;
+  ocr_blocks: OcrBlock[];
+  ocr_source: string | null;
+  ocr_review_required: boolean;
+  error_message: string | null;
+}
+
 export interface StructuredProblem {
   subject: string;
   body_type: string;

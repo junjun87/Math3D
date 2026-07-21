@@ -1,0 +1,2 @@
+ALTER TABLE problems
+ADD COLUMN IF NOT EXISTS ocr_result JSONB;

@@ -43,6 +43,9 @@ async def get_ocr_result(
         "status": problem.status,
         "ocr_raw_text": problem.ocr_raw_text,
         "ocr_confidence": problem.ocr_confidence,
+        "ocr_blocks": (problem.ocr_result or {}).get("blocks", []),
+        "ocr_source": (problem.ocr_result or {}).get("source"),
+        "ocr_review_required": (problem.ocr_result or {}).get("review_required", False),
         "error_message": problem.error_message,
     }
 

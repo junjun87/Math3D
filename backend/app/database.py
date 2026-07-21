@@ -1,5 +1,5 @@
 from contextlib import contextmanager
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, Session
 from app.config import get_settings
@@ -78,3 +78,6 @@ async def init_db():
     """Create all tables (for dev; use Alembic in production)."""
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(text(
+            "ALTER TABLE problems ADD COLUMN IF NOT EXISTS ocr_result JSONB"
+        ))

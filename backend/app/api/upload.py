@@ -40,35 +40,34 @@ async def upload_problem_image(
     if file_size_mb > settings.MAX_UPLOAD_SIZE_MB:
         raise HTTPException(400, f"File too large: {file_size_mb:.1f}MB > {settings.MAX_UPLOAD_SIZE_MB}MB")
 
-    # 统一转为 JPEG 格式保存
+    # Normalize the orientation and preserve a lossless OCR source image.
     try:
-        from PIL import Image
+        from PIL import Image, ImageOps
         import io as pil_io
         img = Image.open(pil_io.BytesIO(contents))
+        img = ImageOps.exif_transpose(img)
         original_mode = img.mode
         original_size = img.size
-        # 统一转 RGB，清除 EXIF/元数据
+        # Convert to RGB and clear image metadata.
         if img.mode in ("RGBA", "P", "LA", "CMYK"):
             img = img.convert("RGB")
         elif img.mode != "RGB":
             img = img.convert("RGB")
-        # 限制 2048px（给 OCR 保留足够细节）
+        # Keep small mathematical symbols by allowing a larger OCR image.
         w, h = img.size
-        if max(w, h) > 2048:
-            ratio = 2048 / max(w, h)
+        if max(w, h) > settings.OCR_MAX_IMAGE_DIMENSION:
+            ratio = settings.OCR_MAX_IMAGE_DIMENSION / max(w, h)
             img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
-        # 重建无元数据的干净图像
-        clean = Image.new("RGB", img.size, (255, 255, 255))
-        clean.paste(img)
-        jpg_buf = pil_io.BytesIO()
-        clean.save(jpg_buf, format="JPEG", quality=92, optimize=True)
-        contents = jpg_buf.getvalue()
-        ext = ".jpg"
+        # PNG avoids a second lossy JPEG pass over fraction bars and subscripts.
+        image_buf = pil_io.BytesIO()
+        img.save(image_buf, format="PNG", optimize=True)
+        contents = image_buf.getvalue()
+        ext = ".png"
         filename = f"{uuid.uuid4()}{ext}"
         filepath = os.path.join(settings.UPLOAD_DIR, filename)
         logger.info(
-            "Image converted: mode=%s size=%s -> JPEG %s, %d bytes",
-            original_mode, original_size, clean.size, len(contents)
+            "Image normalized: mode=%s size=%s -> PNG %s, %d bytes",
+            original_mode, original_size, img.size, len(contents)
         )
     except Exception as e:
         logger.error("Image conversion failed: %s", e)
