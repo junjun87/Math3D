@@ -1,6 +1,6 @@
 import aiofiles
 import aiofiles.os as aos
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image, ImageFilter
 import io
 
 
@@ -51,17 +51,15 @@ async def compress_image(
 
 
 def preprocess_for_ocr(image_data: bytes) -> bytes:
-    """OCR 预处理：灰度化、增强对比度、降噪。"""
+    """[已废弃] OCR 预处理。
+
+    此函数已被 ocr_service._preprocess_for_ocr() 替代。
+    新实现：保留 RGB 色彩、不做 autocontrast、输出 PNG 无损格式。
+    保留此函数仅为兼容旧调用方（当前无调用方）。
+    """
     image = Image.open(io.BytesIO(image_data))
-    image = image.convert("L")  # 灰度化
-
-    # 增强对比度
-    enhancer = ImageEnhance.Contrast(image)
-    image = enhancer.enhance(2.0)
-
-    # 锐化
+    image = image.convert("RGB")
     image = image.filter(ImageFilter.SHARPEN)
-
     buf = io.BytesIO()
     image.save(buf, format="PNG")
     return buf.getvalue()

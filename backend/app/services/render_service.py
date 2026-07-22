@@ -139,25 +139,28 @@ scene.add(edgeGroup);
 
 // 面（半透明）
 if (LESSON_DATA.faces) {
+  const faceMat = new THREE.MeshPhongMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
   for (const [name, faceVertices] of LESSON_DATA.faces) {
     if (faceVertices.length >= 3) {
-      const triPoints = faceVertices.slice(0, 3).map(v => {
+      const pts = faceVertices.map(v => {
         const p = points[v];
-        return new THREE.Vector3(p[0] * s, p[2] * s, p[1] * s);
-      });
-      const faceGeom = new THREE.BufferGeometry();
-      const vertices = new Float32Array([
-        triPoints[0].x, triPoints[0].y, triPoints[0].z,
-        triPoints[1].x, triPoints[1].y, triPoints[1].z,
-        triPoints[2].x, triPoints[2].y, triPoints[2].z,
-      ]);
-      faceGeom.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
-      faceGeom.computeVertexNormals();
-      const faceMesh = new THREE.Mesh(
-        faceGeom,
-        new THREE.MeshPhongMaterial({ color: 0x93c5fd, transparent: true, opacity: 0.3, side: THREE.DoubleSide })
-      );
-      scene.add(faceMesh);
+        return p ? new THREE.Vector3(p[0] * s, p[2] * s, p[1] * s) : null;
+      }).filter(Boolean);
+      if (pts.length < 3) continue;
+      // 三角剖分：3顶点→1个三角形，4顶点→2个三角形(0-1-2 + 0-2-3)
+      const triangles = pts.length === 3 ? [[0,1,2]] : [[0,1,2], [0,2,3]];
+      for (const [a,b,c] of triangles) {
+        if (a >= pts.length || b >= pts.length || c >= pts.length) continue;
+        const faceGeom = new THREE.BufferGeometry();
+        const verts = new Float32Array([
+          pts[a].x, pts[a].y, pts[a].z,
+          pts[b].x, pts[b].y, pts[b].z,
+          pts[c].x, pts[c].y, pts[c].z,
+        ]);
+        faceGeom.setAttribute("position", new THREE.BufferAttribute(verts, 3));
+        faceGeom.computeVertexNormals();
+        scene.add(new THREE.Mesh(faceGeom, faceMat));
+      }
     }
   }
 }

@@ -51,7 +51,7 @@ celery_app.conf.update(
 @celery_app.task(bind=True, name="ocr_recognize")
 def ocr_recognize(self, problem_id: str) -> dict:
     """
-    OCR 识别任务：优先 DeepSeek V4 视觉识图，失败回退阿里云 OCR。
+    OCR 识别任务：阿里云教育 OCR（EduQuestionOcr 主 + EduFormula 公式增强 + General 回退）。
     更新 Problem.ocr_raw_text 和 status。
     """
     from app.models import Problem
@@ -73,7 +73,7 @@ def ocr_recognize(self, problem_id: str) -> dict:
             if not os.path.exists(image_path):
                 raise FileNotFoundError(f"Image file not found: {image_path}")
 
-            # 识别题目文字（LLM 视觉优先，阿里云 OCR 回退）
+            # 识别题目文字（阿里云教育 OCR + 公式增强 + General 回退）
             from app.services.ocr_service import recognize_text
             ocr_data = asyncio.run(recognize_text(image_path))
             raw_text = ocr_data.get("raw_text", "")

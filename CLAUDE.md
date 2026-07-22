@@ -14,8 +14,8 @@ Math3D 是一个**拍照搜题 + AI 解析 + 交互课件** Web 应用，参照 
 | 3D 渲染 | Three.js (react-three-fiber) |
 | 2D/公式 | Canvas + KaTeX |
 | 后端 | Python FastAPI + Uvicorn |
-| OCR | 阿里云 OCR API (RecognizeEduQuestionOcr + RecognizeGeneral fallback) |
-| LLM | Claude API / OpenAI |
+| OCR | 阿里云 OCR (EduQuestionOcr + EduFormula 全覆盖公式增强 + General 回退)，RGB+锐化预处理，figure 图表区域过滤，LaTeX 后处理清理 |
+| LLM | Claude / DeepSeek (Anthropic 兼容 API) |
 | 符号计算 | SymPy |
 | 数据库 | PostgreSQL 16 + Redis 7 |
 | 任务队列 | Celery |
@@ -113,6 +113,7 @@ GET  /api/v1/lessons/{id}/download # 下载离线 HTML
 - [x] 立体几何计算内核（正方体线面角等核心题型）
 - [x] 3D 课件 HTML 模板（Three.js，离线可用）
 - [x] 阿里云 OCR 集成（RecognizeEduQuestionOcr + General 回退）
+- [x] OCR 管线优化（EduFormula 公式增强 / figure 过滤 / RGB 彩色保留 / 数学符号后处理纠错）
 - [x] LLM 题目结构化集成（DeepSeek + 多学科 prompt）
 - [x] Celery 异步任务链联调（端到端验证通过）
 - [x] Phase 2: 多学科 LLM 支持（解析几何/代数/化学识别 + 通用课件渲染）

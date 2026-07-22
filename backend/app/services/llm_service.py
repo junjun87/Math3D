@@ -166,6 +166,69 @@ def _extract_text_from_response(data: dict) -> str:
     raise KeyError(f"Unknown LLM response format: {json.dumps(data, ensure_ascii=False)[:300]}")
 
 
+OCR_CLEANUP_PROMPT = """你是一个数学 OCR 后期修正专家。请修正下面 OCR 识别的数学题文字中的错误，但保留原始语义。
+
+修正规则：
+1. LaTeX 公式使用 $$...$$ 包裹
+2. 修复公式内的 OCR 错误：中文标点（，。；）→ 删除或替换为空格
+3. 修正粘连的 LaTeX 命令：\\angleABC → \\angle ABC、\\sqrt2 → \\sqrt{2}
+4. 上下标加花括号：A_1 → A_{1}、x^2 → x^{2}（但如果已有花括号则不动）
+5. 删除公式块内的中文文字（如 "其中"、"则" 等连词如果在 $$ 内则移到外面）
+6. 分数用 \\frac{分子}{分母} 格式
+7. 不要添加或删除题目信息，只修正格式
+8. 直接输出修正后的文本，不要加任何解释、markdown 代码块、JSON 包裹"""
+
+
+async def clean_ocr_with_llm(ocr_text: str) -> str:
+    """使用 LLM 清理 OCR 文本中的 LaTeX/数学符号错误。
+
+    当 LLM API 不可用时，返回原文（不做修改）。
+    """
+    if not settings.LLM_API_KEY:
+        logger.warning("LLM_API_KEY not configured, skipping OCR cleanup")
+        return ocr_text
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                f"{settings.LLM_API_BASE}/v1/messages",
+                headers={
+                    "x-api-key": settings.LLM_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": settings.LLM_MODEL,
+                    "max_tokens": 2048,
+                    "system": OCR_CLEANUP_PROMPT,
+                    "messages": [
+                        {"role": "user", "content": ocr_text}
+                    ],
+                },
+            )
+            response.raise_for_status()
+            raw_data = response.json()
+
+        content = _extract_text_from_response(raw_data)
+        if content and len(content.strip()) >= len(ocr_text) * 0.3:
+            logger.info("LLM OCR cleanup: %d → %d chars", len(ocr_text), len(content.strip()))
+            # 如果 LLM 返回了 markdown 代码块包裹，去包裹
+            content = _extract_json(content)
+            # _extract_json 去掉了 ```json 标记，如果内容看起来不像 JSON 则直接返回
+            if content.startswith("{") and content.endswith("}"):
+                # LLM 可能误返回 JSON，用原文
+                logger.warning("LLM returned JSON instead of text, using original")
+                return ocr_text
+            return content.strip()
+        else:
+            logger.warning("LLM OCR cleanup returned too-short result (%d chars)", len(content or ""))
+            return ocr_text
+
+    except Exception as exc:
+        logger.warning("LLM OCR cleanup failed: %s", exc)
+        return ocr_text
+
+
 async def structure_problem(ocr_text: str) -> dict:
     """
     使用 LLM 将 OCR 文本结构化为题目 JSON。
@@ -272,6 +335,7 @@ def _mock_structure(ocr_text: str) -> dict:
 
 def _detect_subject(text: str) -> str:
     """根据关键词识别学科。"""
+    import re
     # 立体几何
     geo_keywords = [
         "正方体", "长方体", "棱柱", "棱锥", "四面体", "圆柱", "圆锥",

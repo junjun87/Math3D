@@ -67,6 +67,7 @@ async def confirm_problem(
 
     problem.status = "confirmed"
     await db.flush()
+    await db.commit()  # 必须在发 Celery 任务前提交，否则 Worker 读到旧数据
 
     # 触发后续计算任务
     from app.tasks import solve_and_render

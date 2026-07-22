@@ -52,16 +52,16 @@ async def upload_problem_image(
             img = img.convert("RGB")
         elif img.mode != "RGB":
             img = img.convert("RGB")
-        # 限制 2048px（给 OCR 保留足够细节）
+        # 限制 4096px（阿里云 OCR 支持最大 8192px，4096 保留足够细节且控制文件大小）
         w, h = img.size
-        if max(w, h) > 2048:
-            ratio = 2048 / max(w, h)
+        if max(w, h) > 4096:
+            ratio = 4096 / max(w, h)
             img = img.resize((int(w * ratio), int(h * ratio)), Image.LANCZOS)
         # 重建无元数据的干净图像
         clean = Image.new("RGB", img.size, (255, 255, 255))
         clean.paste(img)
         jpg_buf = pil_io.BytesIO()
-        clean.save(jpg_buf, format="JPEG", quality=92, optimize=True)
+        clean.save(jpg_buf, format="JPEG", quality=95, optimize=True)
         contents = jpg_buf.getvalue()
         ext = ".jpg"
         filename = f"{uuid.uuid4()}{ext}"
@@ -105,6 +105,7 @@ async def upload_problem_image(
     )
     db.add(problem)
     await db.flush()
+    await db.commit()  # 必须在发 Celery 任务前提交，否则 Worker 查不到记录
 
     # 触发 OCR 异步任务
     from app.tasks import ocr_recognize
