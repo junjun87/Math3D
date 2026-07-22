@@ -620,8 +620,16 @@ def _clean_ocr_text(text: str) -> str:
         # ── 根号：OCR 常把 √ 识别成 v 或 V ──
         # 限制：v/V 前面必须是行首/中文/标点/空白（不是字母），
         # 后面括号内不能只是单个变量名（排除 v(x)、V(t) 等函数调用）
-        formula = re.sub(r'(?<=[\s，。：；！？（【《\-–—一-鿿]|^)v\s*(?=[\(\{](?!\s*[a-zA-Z]\s*[\)\}]))', r'\\sqrt', formula)
-        formula = re.sub(r'(?<=[\s，。：；！？（【《\-–—一-鿿]|^)V\s*(?=[\(\{](?!\s*[a-zA-Z]\s*[\)\}]))', r'\\sqrt', formula)
+        formula = re.sub(
+            r'(^|[\s，。：；！？（【《\-–—一-鿿])v\s*(?=[\(\{](?!\s*[a-zA-Z]\s*[\)\}]))',
+            lambda m: m.group(1) + r'\sqrt',
+            formula,
+        )
+        formula = re.sub(
+            r'(^|[\s，。：；！？（【《\-–—一-鿿])V\s*(?=[\(\{](?!\s*[a-zA-Z]\s*[\)\}]))',
+            lambda m: m.group(1) + r'\sqrt',
+            formula,
+        )
 
         # ── 角度符号：30° → 30^{\circ} ──
         formula = re.sub(r'(\d+)°', r'\1^{\\circ}', formula)
