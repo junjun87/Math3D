@@ -199,7 +199,7 @@ async def clean_ocr_with_llm(ocr_text: str) -> str:
                 },
                 json={
                     "model": settings.LLM_MODEL,
-                    "max_tokens": 2048,
+                    "max_tokens": 4096,
                     "system": OCR_CLEANUP_PROMPT,
                     "messages": [
                         {"role": "user", "content": ocr_text}
@@ -212,11 +212,10 @@ async def clean_ocr_with_llm(ocr_text: str) -> str:
         content = _extract_text_from_response(raw_data)
         if content and len(content.strip()) >= len(ocr_text) * 0.3:
             logger.info("LLM OCR cleanup: %d → %d chars", len(ocr_text), len(content.strip()))
-            # 如果 LLM 返回了 markdown 代码块包裹，去包裹
-            content = _extract_json(content)
-            # _extract_json 去掉了 ```json 标记，如果内容看起来不像 JSON 则直接返回
+            # 去掉 LLM 可能加上的 markdown 代码块包裹（``` / ```text 等）
+            content = _strip_markdown_fences(content)
+            # 如果去包裹后看起来像 JSON 包裹的（LLM 误返回 JSON），用原文
             if content.startswith("{") and content.endswith("}"):
-                # LLM 可能误返回 JSON，用原文
                 logger.warning("LLM returned JSON instead of text, using original")
                 return ocr_text
             return content.strip()
@@ -296,6 +295,27 @@ async def structure_problem(ocr_text: str) -> dict:
         json.dumps(raw_data, ensure_ascii=False)[:500] if raw_data else "N/A"
     )
     return _mock_structure(ocr_text)
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """去掉 LLM 返回文本外层的 markdown 代码块标记（``` / ```text / ```latex 等）。
+
+    与 _extract_json 不同，此函数不假设内容是 JSON，
+    只剥除外层 fence，保留内部所有内容不变。
+    """
+    text = text.strip()
+    # 匹配开头的 ```lang 或 ```
+    if text.startswith("```"):
+        # 找到第一个换行，跳过 language tag
+        first_newline = text.find("\n")
+        if first_newline > 0:
+            text = text[first_newline + 1:]
+        else:
+            text = text[3:]
+    # 匹配结尾的 ```
+    if text.endswith("```"):
+        text = text[:-3]
+    return text.strip()
 
 
 def _extract_json(text: str) -> str:

@@ -123,19 +123,16 @@ def _clean_edu_formula_latex(formula: str) -> str:
     formula = re.sub(r'(\\[a-zA-Z]+)\s+\{', r'\1{', formula)
 
     # 2. \\left ( → \\left(，\\right ) → \\right)
-    formula = re.sub(r'(\\left)\s+\(', r'\1(', formula)
-    formula = re.sub(r'(\\right)\s+\)', r'\1)', formula)
-    formula = re.sub(r'(\\left)\s+\[', r'\1[', formula)
-    formula = re.sub(r'(\\right)\s+\]', r'\1]', formula)
-    # 不可见定界符 \\left . → \\left.  \\right . → \\right.
-    formula = re.sub(r'(\\left)\s+\.', r'\1.', formula)
-    formula = re.sub(r'(\\right)\s+\.', r'\1.', formula)
-    # 花括号定界符 \\left \{ → \\left\{
-    formula = re.sub(r'(\\left)\s+\\\{', r'\1\\{', formula)
-    formula = re.sub(r'(\\right)\s+\\\}', r'\1\\}', formula)
-    # 范数定界符 \\left \| → \\left\|
-    formula = re.sub(r'(\\left)\s+\\\|', r'\1\\|', formula)
-    formula = re.sub(r'(\\right)\s+\\\|', r'\1\\|', formula)
+    for cmd in (r'\\left', r'\\right', r'\\big', r'\\Big', r'\\bigg', r'\\Bigg',
+                r'\\biggl', r'\\biggr', r'\\Biggl', r'\\Biggr', r'\\bigl', r'\\bigr'):
+        formula = re.sub(rf'({cmd})\s+\(', r'\1(', formula)
+        formula = re.sub(rf'({cmd})\s+\)', r'\1)', formula)
+        formula = re.sub(rf'({cmd})\s+\[', r'\1[', formula)
+        formula = re.sub(rf'({cmd})\s+\]', r'\1]', formula)
+        formula = re.sub(rf'({cmd})\s+\.', r'\1.', formula)
+        formula = re.sub(rf'({cmd})\s+\\\{{', r'\1\\{', formula)
+        formula = re.sub(rf'({cmd})\s+\\\}}', r'\1\\}', formula)
+        formula = re.sub(rf'({cmd})\s+\\\|', r'\1\\|', formula)
 
     # 3. 花括号内部前后空格：{ x-1 } → {x-1}
     formula = re.sub(r'\{\s+', '{', formula)
@@ -190,8 +187,8 @@ def _crop_formula_region(image_bytes: bytes, bbox: list) -> bytes | None:
         ys = [p.get("y", 0) for p in bbox]
         left, top = int(min(xs)), int(min(ys))
         right, bottom = int(max(xs)), int(max(ys))
-        # 扩展 20px 边距给公式周围留上下文（防止公式边缘符号如根号上横线被裁掉）
-        pad = 20
+        # 扩展 40px 边距给公式周围留上下文（根号上横线、大括号、积分号等高符号需要更多空间）
+        pad = 40
         left = max(0, left - pad)
         top = max(0, top - pad)
         right = min(img.size[0], right + pad)
@@ -362,8 +359,13 @@ def _sanitize_formula_for_edu(text: str) -> str:
     import re
     # 移除中文字符、中文标点（、，。：；！？（）【】《》等）
     cleaned = re.sub(r'[一-鿿　-〿＀-￯]', '', text)
-    # 移除中文逗号/句号等残留
-    cleaned = re.sub(r'[，。：；！？·「」『』【】《》…—～｜＠＃＄％＾＆＊]', '', cleaned)
+    # 移除中文标点（保留 · 作为数学乘点、～ 作为波浪号）
+    cleaned = re.sub(r'[，。：；！？「」『』【】《》…—＠＃＄％＾＆＊]', '', cleaned)
+    # 中文括号替换为英文（可能包裹数学表达式）
+    cleaned = cleaned.replace('（', '(').replace('）', ')')
+    cleaned = cleaned.replace('［', '[').replace('］', ']')
+    # 全角竖线替换为半角（可能是绝对值符号）
+    cleaned = cleaned.replace('｜', '|')
     # 清理多余空格
     cleaned = re.sub(r'\s+', ' ', cleaned).strip()
     return cleaned
@@ -372,8 +374,9 @@ def _sanitize_formula_for_edu(text: str) -> str:
 def _is_non_question_text(text: str, rect: tuple | None) -> bool:
     """判断文本块是否为非题目内容（习题标题、页码等），应过滤掉。"""
     import re
-    # 习题章节标题：√...练、○...练、数字.数字 等模式
-    if re.match(r'^[√○]\s*.{1,6}(练|训|测|题)$', text):
+    # 习题章节标题：√...练、○...练 等模式
+    # 限制：√/○ 后跟 1-6 个中文/空白字符再跟"练/训/测/题"（防止误杀数学 √ 符号）
+    if re.match(r'^[√○]\s*[一-鿿\s]{1,6}(练|训|测|题)$', text):
         return True
     # 纯数字页码（位于页面边缘的小字）
     if re.match(r'^\d{1,3}$', text) and rect:
@@ -474,18 +477,26 @@ def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
     formula_skipped_chinese = 0
     formula_skipped_short = 0
     for group in formula_groups:
-        # 检查组内文本：任何中文都会让 EduFormula 输出乱码
+        # 检查组内文本是否有中文
         group_text = "".join(merged[idx]["text"] for idx in group)
         has_chinese = any('一' <= c <= '鿿' or '　' <= c <= '〿' or '＀' <= c <= '￯'
                          for c in group_text)
         if has_chinese:
-            formula_skipped_chinese += len(group)
-            # 不调用 EduFormula，而是清洗公式文本（移除中文/标点后保留纯 ASCII 数学部分）
+            # 剔除非中文部分后再尝试 EduFormula（中文会影响 API 识别精度）
             for idx in group:
                 sanitized = _sanitize_formula_for_edu(merged[idx]["text"])
-                if sanitized and len(sanitized) >= len(merged[idx]["text"]) * 0.3:
-                    merged[idx]["text"] = sanitized
-            continue
+                if sanitized and len(sanitized) >= 3:
+                    # 保存原始文本，用清洗后的纯数学部分送 EduFormula
+                    pass  # 继续下面的流程
+            # 如果清洗后仍有足够长的纯公式部分，尝试 EduFormula
+            clean_group_text = "".join(
+                _sanitize_formula_for_edu(merged[idx]["text"]) for idx in group
+            )
+            if not clean_group_text or len(clean_group_text) < 3:
+                formula_skipped_chinese += len(group)
+                continue
+            # 有可用的纯公式部分，继续（不跳过）
+            group_text = clean_group_text  # 用于后续阈值检查
 
         if len(group) == 1:
             b = merged[group[0]]
@@ -520,6 +531,13 @@ def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
                     merged[idx]["text"] = ""
                     merged[idx]["confidence"] = 0
                 formula_enhanced += len(group)
+            elif has_chinese:
+                # EduFormula 失败，回退：剔除中文/标点（保留纯数学部分）
+                for idx in group:
+                    sanitized = _sanitize_formula_for_edu(merged[idx]["text"])
+                    if sanitized and len(sanitized) >= 3:
+                        merged[idx]["text"] = sanitized
+                formula_skipped_chinese += len(group)
     # 清理被清空的公式块
     merged = [b for b in merged if b["text"].strip()]
 
@@ -582,24 +600,28 @@ def _clean_ocr_text(text: str) -> str:
         formula = re.sub(r'(?<![\\a-zA-Z])t(?=heta)', r'\\t', formula)  # theta → \theta
 
         # ── LaTeX 命令与后续字母粘连：\angleABC → \angle ABC ──
-        # 常见命令后紧跟大写字母/数字时插入空格
+        # 常见命令后紧跟大写字母/数字/字母时插入空格或花括号
         formula = re.sub(
-            r'\\(angle|triangle|sqrt|frac|cdot|times|div|pm|circ|prime|infty|leq|geq|neq|approx|rightarrow|Rightarrow|Leftrightarrow|because|therefore)(?=[A-Z\d])',
+            r'\\(angle|triangle|sqrt|frac|cdot|times|div|pm|circ|prime|infty|leq|geq|neq|approx|rightarrow|Rightarrow|Leftrightarrow|because|therefore|sum|prod|int|lim|vec|hat|bar|dot|tilde|ddot|overrightarrow|overleftarrow)(?=[A-Za-z\d])',
             r'\\\1 ',
             formula,
         )
 
-        # ── 箭头符号（OCR 常见错误：-> → \rightarrow） ──
+        # ── 箭头/关系符号（OCR 常见错误） ──
         formula = re.sub(r'->(?!>)', r'\\rightarrow ', formula)
         formula = re.sub(r'→', r'\\rightarrow ', formula)
         formula = re.sub(r'<=>(?!>)', r'\\Leftrightarrow ', formula)
         formula = re.sub(r'=>(?!>)', r'\\Rightarrow ', formula)
-        formula = re.sub(r'<=', r'\\leq ', formula)
-        formula = re.sub(r'>=', r'\\geq ', formula)
+        # <= → \leq（但排除 <=>、<==、<<= 等复合符号）
+        formula = re.sub(r'(?<![<=])<=(?![=>])', r'\\leq ', formula)
+        # >= → \geq（但排除 >=>、>>= 等复合符号）
+        formula = re.sub(r'(?<![>=])>=(?![=>])', r'\\geq ', formula)
 
         # ── 根号：OCR 常把 √ 识别成 v 或 V ──
-        formula = re.sub(r'\bv\s*(?=[\(\{\[\|])', r'\\sqrt', formula)
-        formula = re.sub(r'\bV\s*(?=[\(\{\[\|])', r'\\sqrt', formula)
+        # 限制：v/V 前面必须是行首/中文/标点/空白（不是字母），
+        # 后面括号内不能只是单个变量名（排除 v(x)、V(t) 等函数调用）
+        formula = re.sub(r'(?<=[\s，。：；！？（【《\-–—一-鿿]|^)v\s*(?=[\(\{](?!\s*[a-zA-Z]\s*[\)\}]))', r'\\sqrt', formula)
+        formula = re.sub(r'(?<=[\s，。：；！？（【《\-–—一-鿿]|^)V\s*(?=[\(\{](?!\s*[a-zA-Z]\s*[\)\}]))', r'\\sqrt', formula)
 
         # ── 角度符号：30° → 30^{\circ} ──
         formula = re.sub(r'(\d+)°', r'\1^{\\circ}', formula)
@@ -610,6 +632,50 @@ def _clean_ocr_text(text: str) -> str:
         formula = re.sub(r'(?<=\d|\))\s*·\s*(?=\d|\()', r' \\cdot ', formula)
 
         # ── Unicode 数学符号 → LaTeX（确定性转换，无歧义） ──
+        # 希腊字母（小写）
+        formula = re.sub(r'α', r'\\alpha ', formula)
+        formula = re.sub(r'β', r'\\beta ', formula)
+        formula = re.sub(r'γ', r'\\gamma ', formula)
+        formula = re.sub(r'δ', r'\\delta ', formula)
+        formula = re.sub(r'ε', r'\\varepsilon ', formula)
+        formula = re.sub(r'θ', r'\\theta ', formula)
+        formula = re.sub(r'λ', r'\\lambda ', formula)
+        formula = re.sub(r'μ', r'\\mu ', formula)
+        formula = re.sub(r'π', r'\\pi ', formula)
+        formula = re.sub(r'ρ', r'\\rho ', formula)
+        formula = re.sub(r'σ', r'\\sigma ', formula)
+        formula = re.sub(r'φ', r'\\phi ', formula)
+        formula = re.sub(r'ω', r'\\omega ', formula)
+        # 希腊字母（大写）
+        formula = re.sub(r'Δ', r'\\Delta ', formula)
+        formula = re.sub(r'Σ', r'\\Sigma ', formula)
+        formula = re.sub(r'Ω', r'\\Omega ', formula)
+        formula = re.sub(r'Π', r'\\Pi ', formula)
+        formula = re.sub(r'Γ', r'\\Gamma ', formula)
+        formula = re.sub(r'Θ', r'\\Theta ', formula)
+        formula = re.sub(r'Λ', r'\\Lambda ', formula)
+        formula = re.sub(r'Φ', r'\\Phi ', formula)
+        # 关系/集合符号
+        formula = re.sub(r'∠', r'\\angle ', formula)
+        formula = re.sub(r'⊥', r'\\perp ', formula)
+        formula = re.sub(r'∥', r'\\parallel ', formula)
+        formula = re.sub(r'∈', r'\\in ', formula)
+        formula = re.sub(r'∉', r'\\notin ', formula)
+        formula = re.sub(r'⊂', r'\\subset ', formula)
+        formula = re.sub(r'⊆', r'\\subseteq ', formula)
+        formula = re.sub(r'∪', r'\\cup ', formula)
+        formula = re.sub(r'∩', r'\\cap ', formula)
+        formula = re.sub(r'∀', r'\\forall ', formula)
+        formula = re.sub(r'∃', r'\\exists ', formula)
+        formula = re.sub(r'∅', r'\\emptyset ', formula)
+        # 运算符
+        formula = re.sub(r'∫', r'\\int ', formula)
+        formula = re.sub(r'∑', r'\\sum ', formula)
+        formula = re.sub(r'∏', r'\\prod ', formula)
+        formula = re.sub(r'√', r'\\sqrt', formula)
+        formula = re.sub(r'∂', r'\\partial ', formula)
+        formula = re.sub(r'∞', r'\\infty ', formula)
+        # 之前的映射保留
         formula = re.sub(r'÷', r'\\div ', formula)
         formula = re.sub(r'△', r'\\triangle ', formula)
         formula = re.sub(r'≠', r'\\neq ', formula)
@@ -618,8 +684,8 @@ def _clean_ocr_text(text: str) -> str:
         formula = re.sub(r'∵', r'\\because ', formula)
         formula = re.sub(r'∴', r'\\therefore ', formula)
 
-        # ── 无穷符号 ──
-        formula = re.sub(r'\boo\b', r'\\infty', formula)
+        # ── 无穷符号：只匹配独立的 "oo"（前后都不是字母），排除单词内的 oo ──
+        formula = re.sub(r'(?<![a-zA-Z])oo(?![a-zA-Z])', r'\\infty', formula)
 
         # ── 清理多余空格 ──
         formula = re.sub(r'\s+', ' ', formula).strip()
@@ -631,20 +697,35 @@ def _clean_ocr_text(text: str) -> str:
     # 5. 分数结构恢复：将公式块中的 (expr)/(expr) 转为 \frac{expr}{expr}
     #    仅当 EduFormula 失败回退到原始文本时有用
     def _recover_fractions(m):
-        """恢复被 OCR 压扁的分数结构。"""
+        """恢复被 OCR 压扁的分数结构。支持嵌套括号。"""
         formula = m.group(1)
 
         # 5a. 括号分数：(expr)/(expr) → \frac{expr}{expr}
-        #     分子和分母各自不含嵌套括号，避免错误匹配
+        #     支持嵌套括号：使用括号深度计数匹配
+        def _replace_paren_fraction(match):
+            num = match.group(1)
+            den = match.group(2)
+            return f'\\frac{{{num}}}{{{den}}}'
+
+        # 匹配 ( ... ) / ( ... )，其中括号内部支持嵌套
+        # 使用非贪婪匹配 + 递归模式
         formula = re.sub(
-            r'\(([^()]+)\)\s*/\s*\(([^()]+)\)',
-            r'\\frac{\1}{\2}',
+            r'\(((?:[^()]|\([^()]*\))*)\)\s*/\s*\(((?:[^()]|\([^()]*\))*)\)',
+            _replace_paren_fraction,
             formula,
         )
 
         # 5b. 简单数字分数：1/2, 3/4 等（仅限个位数，避免误匹配日期如 2024/05）
         formula = re.sub(
             r'(?<!\d)(\d)\s*/\s*(\d)(?!\d)',
+            r'\\frac{\1}{\2}',
+            formula,
+        )
+
+        # 5c. 代数表达式分数：x/y → \frac{x}{y}、x^2/y → \frac{x^2}{y}
+        #     排除 + - * 避免运算符歧义（如 a-b/c 不应变成 \frac{a-b}{c}）
+        formula = re.sub(
+            r'([a-zA-Z0-9^_{}\\]+)\s*/\s*([a-zA-Z0-9^_{}\\]+)',
             r'\\frac{\1}{\2}',
             formula,
         )
@@ -670,5 +751,8 @@ def _call_aliyun_general_ocr(image_bytes: bytes) -> dict:
     if not content:
         raise OCRServiceError("Alibaba General OCR returned no text")
 
-    logger.info("General OCR: %s", content[:200])
+    # General OCR 返回纯文本无公式检测，应用符号后处理校正
+    content = _clean_ocr_text(content)
+
+    logger.info("General OCR (post-processed): %s", content[:200])
     return {"raw_text": content, "text_blocks": [{"text": content, "confidence": 0.99, "bbox": []}], "confidence": 0.99}
