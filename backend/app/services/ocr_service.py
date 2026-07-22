@@ -378,6 +378,11 @@ def _is_non_question_text(text: str, rect: tuple | None) -> bool:
     # 限制：√/○ 后跟 1-6 个中文/空白字符再跟"练/训/测/题"（防止误杀数学 √ 符号）
     if re.match(r'^[√○]\s*[一-鿿\s]{1,6}(练|训|测|题)$', text):
         return True
+    # 习题/考向标记：考向N、考点N、题型N、第N题、题N
+    if re.match(r'^(考向|考点|题型|题)\s*\d+[：:]*$', text):
+        return True
+    if re.match(r'^第\s*\d+\s*题[：:]*$', text):
+        return True
     # 图表/示例标识：图1、图2-1、如图、示例1、例1、(第x题图) 等
     if re.match(r'^[（(]?第?\s*\d+[）)]?\s*题[图圖]?[）)]?$', text):
         return True
@@ -386,6 +391,11 @@ def _is_non_question_text(text: str, rect: tuple | None) -> bool:
     if re.match(r'^[（(]?如[图圖右左上下][所]?[示]?[）)]?$', text):
         return True
     if re.match(r'^(示例|例)\s*\d+[：:]*$', text):
+        return True
+    # 答案标记：答案、解析、故选、故选A 等
+    if re.match(r'^(答案|解析|故选|因此|所以)[：:]*$', text):
+        return True
+    if re.match(r'^故选\s*[A-Da-d][。.]?$', text):
         return True
     # 纯数字页码（位于页面边缘的小字）
     if re.match(r'^\d{1,3}$', text) and rect:
@@ -491,21 +501,16 @@ def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
         has_chinese = any('一' <= c <= '鿿' or '　' <= c <= '〿' or '＀' <= c <= '￯'
                          for c in group_text)
         if has_chinese:
-            # 剔除非中文部分后再尝试 EduFormula（中文会影响 API 识别精度）
+            # EduFormula 是纯公式 API，截图中含中文会返回乱码（如 "加 出"）。
+            # 不调用 API，仅清洗文本（剔除中文/标点，保留 LaTeX 数学部分）。
+            # EduQuestionOcr 本身已输出不错的 LaTeX（\angle、\sqrt、A_{1} 等），
+            # 后续 LLM cleanup 会修复空格和花括号问题。
             for idx in group:
                 sanitized = _sanitize_formula_for_edu(merged[idx]["text"])
                 if sanitized and len(sanitized) >= 3:
-                    # 保存原始文本，用清洗后的纯数学部分送 EduFormula
-                    pass  # 继续下面的流程
-            # 如果清洗后仍有足够长的纯公式部分，尝试 EduFormula
-            clean_group_text = "".join(
-                _sanitize_formula_for_edu(merged[idx]["text"]) for idx in group
-            )
-            if not clean_group_text or len(clean_group_text) < 3:
-                formula_skipped_chinese += len(group)
-                continue
-            # 有可用的纯公式部分，继续（不跳过）
-            group_text = clean_group_text  # 用于后续阈值检查
+                    merged[idx]["text"] = sanitized
+            formula_skipped_chinese += len(group)
+            continue
 
         if len(group) == 1:
             b = merged[group[0]]
@@ -540,13 +545,6 @@ def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
                     merged[idx]["text"] = ""
                     merged[idx]["confidence"] = 0
                 formula_enhanced += len(group)
-            elif has_chinese:
-                # EduFormula 失败，回退：剔除中文/标点（保留纯数学部分）
-                for idx in group:
-                    sanitized = _sanitize_formula_for_edu(merged[idx]["text"])
-                    if sanitized and len(sanitized) >= 3:
-                        merged[idx]["text"] = sanitized
-                formula_skipped_chinese += len(group)
     # 清理被清空的公式块
     merged = [b for b in merged if b["text"].strip()]
 
@@ -607,12 +605,37 @@ def _global_symbol_cleanup(text: str) -> str:
     # ── 度数符号：30° → 30^{\\circ}（全局） ──
     text = re.sub(r'(\d+)\s*°', r'\1^{\\circ}', text)
     text = re.sub(r'(\d+)\s*deg\b', r'\1^{\\circ}', text)
+    # OCR 可能把 ° 识别成 。(中文句号) 或 o（字母o）
+    text = re.sub(r'(\d+)\s*。', r'\1^{\\circ}', text)
+    text = re.sub(r'(\d+)\s*[oO]\b(?!\w)', r'\1^{\\circ}', text)
 
-    # ── 根号 √（Unicode 字符） → \\sqrt ──
+    # ── 根号：√（Unicode）或 OCR 误识别成 v/V（ASCII） → \\sqrt ──
     text = re.sub(r'√', r'\\sqrt', text)
+    # v/V 后面紧跟括号/花括号且括号内不是单变量 → 很可能是根号
+    text = re.sub(
+        r'(^|[\s，。：；！？（【《\-–—一-鿿])v\s*(?=[\(\{](?!\s*[a-zA-Z]\s*[\)\}]))',
+        lambda m: m.group(1) + r'\sqrt',
+        text,
+    )
+    text = re.sub(
+        r'(^|[\s，。：；！？（【《\-–—一-鿿])V\s*(?=[\(\{](?!\s*[a-zA-Z]\s*[\)\}]))',
+        lambda m: m.group(1) + r'\sqrt',
+        text,
+    )
 
     # ── 角度符号 ∠ → \\angle ──
     text = re.sub(r'∠', r'\\angle ', text)
+    # OCR 可能把 ∠ 识别成 < 或 L（跟在中文/行首后 + 后跟大写字母）
+    text = re.sub(
+        r'(^|[\s，。：；！？一-鿿])<(?=[A-Z]{1,3}(?![A-Za-z]))',
+        lambda m: m.group(1) + r'\angle ',
+        text,
+    )
+    text = re.sub(
+        r'(^|[\s，。：；！？一-鿿])L(?=[A-Z]{1,3}(?![A-Za-z]))',
+        lambda m: m.group(1) + r'\angle ',
+        text,
+    )
 
     # ── 其他高优先级 Unicode 符号（不依赖公式块检测） ──
     GLOBAL_UNICODE_MAP = [
