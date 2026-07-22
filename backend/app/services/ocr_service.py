@@ -372,11 +372,20 @@ def _sanitize_formula_for_edu(text: str) -> str:
 
 
 def _is_non_question_text(text: str, rect: tuple | None) -> bool:
-    """判断文本块是否为非题目内容（习题标题、页码等），应过滤掉。"""
+    """判断文本块是否为非题目内容（习题标题、页码、图例标识等），应过滤掉。"""
     import re
     # 习题章节标题：√...练、○...练 等模式
     # 限制：√/○ 后跟 1-6 个中文/空白字符再跟"练/训/测/题"（防止误杀数学 √ 符号）
     if re.match(r'^[√○]\s*[一-鿿\s]{1,6}(练|训|测|题)$', text):
+        return True
+    # 图表/示例标识：图1、图2-1、如图、示例1、例1、(第x题图) 等
+    if re.match(r'^[（(]?第?\s*\d+[）)]?\s*题[图圖]?[）)]?$', text):
+        return True
+    if re.match(r'^[（(]?图[圖]?\s*\d[\d\-.]*[）)]?$', text):
+        return True
+    if re.match(r'^[（(]?如[图圖右左上下][所]?[示]?[）)]?$', text):
+        return True
+    if re.match(r'^(示例|例)\s*\d+[：:]*$', text):
         return True
     # 纯数字页码（位于页面边缘的小字）
     if re.match(r'^\d{1,3}$', text) and rect:
@@ -559,9 +568,92 @@ def _call_aliyun_edu_ocr(image_bytes: bytes) -> dict:
     return {"raw_text": raw_text, "text_blocks": text_blocks, "confidence": round(confidence, 4)}
 
 
+def _global_symbol_cleanup(text: str) -> str:
+    """全局数学符号 → LaTeX 转换（不区分是否在 $$ 块内）。
+
+    OCR 经常不会将所有数学符号标记为公式块，导致 ∠、°、√、₁ 等
+    以纯文本形式存在。这一步在所有 $$ 处理之前运行，确保这些符号
+    无论出现在哪里都能被正确转换。
+
+    Returns:
+        转换后的文本（Unicode 数学符号已替换为 LaTeX 命令）。
+    """
+    import re
+
+    # ── Unicode 下标数字：₀₁₂₃₄₅₆₇₈₉ → _{0} _{1} ... _{9} ──
+    SUBSCRIPTS = str.maketrans({
+        '₀': '_{0}', '₁': '_{1}', '₂': '_{2}', '₃': '_{3}', '₄': '_{4}',
+        '₅': '_{5}', '₆': '_{6}', '₇': '_{7}', '₈': '_{8}', '₉': '_{9}',
+    })
+    text = text.translate(SUBSCRIPTS)
+
+    # ── Unicode 上标数字：⁰¹²³⁴⁵⁶⁷⁸⁹ → ^{0} ^{1} ... ^{9} ──
+    SUPERSCRIPTS = str.maketrans({
+        '⁰': '^{0}', '¹': '^{1}', '²': '^{2}', '³': '^{3}', '⁴': '^{4}',
+        '⁵': '^{5}', '⁶': '^{6}', '⁷': '^{7}', '⁸': '^{8}', '⁹': '^{9}',
+    })
+    text = text.translate(SUPERSCRIPTS)
+
+    # ── 上标字符（常用，非数字）：ᵃᵇᶜᵈᵉᶠᵍʰⁱʲᵏˡᵐⁿᵒᵖ ʳˢᵗᵘᵛʷˣʸᶻ ──
+    SUPERSCRIPT_LETTERS = str.maketrans({
+        'ᵃ': '^{a}', 'ᵇ': '^{b}', 'ᶜ': '^{c}', 'ᵈ': '^{d}', 'ᵉ': '^{e}',
+        'ᶠ': '^{f}', 'ᵍ': '^{g}', 'ʰ': '^{h}', 'ⁱ': '^{i}', 'ʲ': '^{j}',
+        'ᵏ': '^{k}', 'ˡ': '^{l}', 'ᵐ': '^{m}', 'ⁿ': '^{n}', 'ᵒ': '^{o}',
+        'ᵖ': '^{p}', 'ʳ': '^{r}', 'ˢ': '^{s}', 'ᵗ': '^{t}', 'ᵘ': '^{u}',
+        'ᵛ': '^{v}', 'ʷ': '^{w}', 'ˣ': '^{x}', 'ʸ': '^{y}', 'ᶻ': '^{z}',
+    })
+    text = text.translate(SUPERSCRIPT_LETTERS)
+
+    # ── 度数符号：30° → 30^{\\circ}（全局） ──
+    text = re.sub(r'(\d+)\s*°', r'\1^{\\circ}', text)
+    text = re.sub(r'(\d+)\s*deg\b', r'\1^{\\circ}', text)
+
+    # ── 根号 √（Unicode 字符） → \\sqrt ──
+    text = re.sub(r'√', r'\\sqrt', text)
+
+    # ── 角度符号 ∠ → \\angle ──
+    text = re.sub(r'∠', r'\\angle ', text)
+
+    # ── 其他高优先级 Unicode 符号（不依赖公式块检测） ──
+    GLOBAL_UNICODE_MAP = [
+        # 希腊字母（最常被 OCR 漏标为公式的）
+        (r'Δ', r'\\Delta '), (r'θ', r'\\theta '), (r'π', r'\\pi '),
+        (r'α', r'\\alpha '), (r'β', r'\\beta '), (r'γ', r'\\gamma '),
+        (r'λ', r'\\lambda '), (r'μ', r'\\mu '), (r'σ', r'\\sigma '),
+        (r'φ', r'\\phi '), (r'ω', r'\\omega '), (r'Σ', r'\\Sigma '),
+        (r'Ω', r'\\Omega '), (r'δ', r'\\delta '), (r'ε', r'\\varepsilon '),
+        (r'ρ', r'\\rho '),
+        # 关系符号
+        (r'⊥', r'\\perp '), (r'∥', r'\\parallel '),
+        (r'≤', r'\\leq '), (r'≥', r'\\geq '),
+        (r'≠', r'\\neq '), (r'≈', r'\\approx '),
+        (r'∈', r'\\in '), (r'⊂', r'\\subset '),
+        (r'⊆', r'\\subseteq '), (r'∪', r'\\cup '), (r'∩', r'\\cap '),
+        # 运算符
+        (r'÷', r'\\div '), (r'±', r'\\pm '),
+        (r'∞', r'\\infty '), (r'∂', r'\\partial '),
+        (r'∫', r'\\int '), (r'∑', r'\\sum '), (r'∏', r'\\prod '),
+        # 箭头
+        (r'→', r'\\rightarrow '), (r'←', r'\\leftarrow '),
+        (r'↑', r'\\uparrow '), (r'↓', r'\\downarrow '),
+        (r'↔', r'\\leftrightarrow '),
+        # 其他
+        (r'△', r'\\triangle '), (r'∵', r'\\because '), (r'∴', r'\\therefore '),
+        (r'∀', r'\\forall '), (r'∃', r'\\exists '),
+        (r'∅', r'\\emptyset '), (r'∉', r'\\notin '),
+    ]
+    for uchar, latex in GLOBAL_UNICODE_MAP:
+        text = re.sub(uchar, latex, text)
+
+    return text
+
+
 def _clean_ocr_text(text: str) -> str:
     """清理 OCR 文本杂质：公式内空格、LaTeX 块合并、常见数学符号 OCR 错误修正。"""
     import re
+
+    # 0. 全局 Unicode 数学符号 → LaTeX（不依赖 $$ 公式块检测）
+    text = _global_symbol_cleanup(text)
 
     # 1. 修复公式块内多余空格和中文标点污染
     def _fix_formula_spaces(m):
