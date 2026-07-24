@@ -6,13 +6,14 @@ Edulab MVP Web 后端
 """
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, File, UploadFile
 
 load_dotenv()
 
@@ -27,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from geometry_kernel import solve
+import llm_parser
 
 app = FastAPI(title="Edulab MVP - Solid Geometry")
 
@@ -84,6 +86,21 @@ def _build_lesson_data(solution) -> dict:
 
 class SolveRequest(BaseModel):
     problem: str
+
+
+@app.post("/api/ocr")
+async def ocr_image(image: UploadFile = File(...)):
+    """拍照 OCR：上传图片，调用视觉 LLM 提取题目文本。"""
+    try:
+        contents = await image.read()
+        image_b64 = base64.b64encode(contents).decode("utf-8")
+        media_type = image.content_type or "image/jpeg"
+        text = llm_parser.ocr_image(image_b64, media_type)
+        return {"success": True, "text": text}
+    except llm_parser.LLMNotConfiguredError as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=503)
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
 @app.get("/api/health")

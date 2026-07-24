@@ -189,6 +189,69 @@ def _parse_response(raw: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# 视觉 LLM 调用
+# ---------------------------------------------------------------------------
+
+VISION_SYSTEM_PROMPT = """你是一个立体几何题面 OCR 专家。你的任务是从用户上传的图片中提取立体几何题目原文。
+
+## 规则
+
+1. 忠实还原图片中的题目文字，不要添加解释或额外内容。
+2. 保留题目中的所有数学符号、字母、下标（如下标用 _ 表示，如 A_1、C_1）。
+3. 如果是中文题目，用简体中文输出。
+4. 如果图片中没有几何题目，输出空字符串。
+5. 只输出题目原文，不要包含任何前缀、后缀或说明。"""
+
+
+def _call_vision_llm(image_base64: str, media_type: str, config: LLMConfig) -> str:
+    """调用 OpenAI 兼容 vision API，传入图片，返回识别文本。"""
+    url = config.base_url.rstrip("/") + "/v1/chat/completions"
+
+    payload = {
+        "model": config.model,
+        "messages": [
+            {
+                "role": "system",
+                "content": VISION_SYSTEM_PROMPT,
+            },
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "请识别并提取这张图片中的立体几何题目原文。",
+                    },
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{media_type};base64,{image_base64}",
+                        },
+                    },
+                ],
+            },
+        ],
+        "max_tokens": 512,
+        "temperature": 0.1,
+    }
+
+    headers = {
+        "Authorization": f"Bearer {config.api_key}",
+        "Content-Type": "application/json",
+    }
+
+    logger.info("Calling vision LLM: model=%s url=%s", config.model, url)
+
+    with httpx.Client(timeout=config.timeout) as client:
+        resp = client.post(url, json=payload, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+
+    content = data["choices"][0]["message"]["content"]
+    logger.info("Vision LLM response: %s", content[:200])
+    return content.strip()
+
+
+# ---------------------------------------------------------------------------
 # 公共 API
 # ---------------------------------------------------------------------------
 
@@ -212,3 +275,29 @@ def parse_problem(problem_text: str) -> dict:
     system_prompt = _build_system_prompt()
     raw = _call_llm(system_prompt, problem_text, config)
     return _parse_response(raw)
+
+
+def ocr_image(image_base64: str, media_type: str = "image/jpeg") -> str:
+    """
+    调用视觉 LLM 识别图片中的几何题目。
+
+    Args:
+        image_base64: Base64 编码的图片数据（不含 data:xxx;base64, 前缀）
+        media_type: 图片 MIME 类型
+
+    Returns:
+        识别出的题目文本
+
+    Raises:
+        LLMNotConfiguredError — API key 未配置
+        httpx.HTTPError — 网络或 API 错误
+    """
+    config = LLMConfig.from_env()
+
+    if not config.is_configured:
+        raise LLMNotConfiguredError(
+            "LLM_API_KEY 未设置，无法调用视觉 OCR。"
+            "请设置环境变量 LLM_API_KEY、LLM_BASE_URL、LLM_MODEL（需支持 vision）。"
+        )
+
+    return _call_vision_llm(image_base64, media_type, config)

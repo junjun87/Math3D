@@ -134,9 +134,6 @@
 <!-- Hidden file input -->
 <input type="file" id="file-input" accept="image/*" capture="environment" style="display:none">
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js">
-</script>
-
 <script>
     const API_BASE = '';
     const $status = document.getElementById('status');
@@ -145,9 +142,6 @@
     const $photoArea = document.getElementById('photo-area');
     const $photoImg = document.getElementById('photo-img');
     const $fileInput = document.getElementById('file-input');
-
-    let ocrWorker = null;
-    let currentImageFile = null;
 
     function setStatus(msg, type) {
         $status.textContent = msg;
@@ -162,58 +156,56 @@
     $fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        currentImageFile = file;
 
-        // Show preview
         $photoImg.src = URL.createObjectURL(file);
         $photoArea.style.display = 'block';
         $status.className = '';
 
-        // Run OCR
         await runOCR(file);
     });
 
     document.getElementById('btn-retake').addEventListener('click', () => {
-        currentImageFile = null;
         $photoImg.src = '';
         $photoArea.style.display = 'none';
         $fileInput.value = '';
         $status.className = '';
     });
 
-    // ---- OCR ----
+    // ---- OCR：上传图片到后端，由视觉 LLM 识别 ----
     async function runOCR(file) {
-        setStatus('正在加载 OCR 引擎（首次约需下载 10MB 中文语言包）...', 'loading');
+        setStatus('正在上传图片并调用视觉模型识别...', 'loading');
 
         try {
-            if (!ocrWorker) {
-                ocrWorker = await Tesseract.createWorker('chi_sim', 1, {
-                    logger: m => {
-                        if (m.status === 'recognizing text') {
-                            const pct = Math.round(m.progress * 100);
-                            setStatus(`OCR 识别中... ${pct}%`, 'loading');
-                        } else if (m.status === 'loading tesseract core' || m.status === 'initializing tesseract') {
-                            setStatus('加载 OCR 引擎...', 'loading');
-                        } else if (m.status === 'loading language traineddata') {
-                            setStatus('下载中文语言包...', 'loading');
-                        }
-                    }
-                });
+            const formData = new FormData();
+            formData.append('image', file);
+
+            const res = await fetch(`${API_BASE}/api/ocr`, {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (!data.success) {
+                // 503 = LLM 未配置
+                if (res.status === 503) {
+                    setStatus('视觉 LLM 未配置。请设置 LLM_API_KEY 环境变量，或手动输入题目。', 'error');
+                } else {
+                    setStatus('OCR 失败：' + (data.error || '未知错误'), 'error');
+                }
+                return;
             }
 
-            const { data: { text } } = await ocrWorker.recognize(file);
-            const cleaned = text.replace(/\s+/g, ' ').trim();
-
-            if (cleaned) {
-                $textarea.value = cleaned;
+            const text = (data.text || '').trim();
+            if (text) {
+                $textarea.value = text;
                 $textarea.focus();
                 setStatus('识别完成，请核对后点击「生成解题页」', 'success');
             } else {
-                setStatus('未识别到文字，请手动输入或重新拍照', 'error');
+                setStatus('未识别到题目文字，请手动输入或重新拍照', 'error');
             }
         } catch (err) {
             console.error('OCR error:', err);
-            setStatus('OCR 失败：' + err.message + '，请手动输入题目', 'error');
+            setStatus('网络错误，请检查后端是否运行。或手动输入题目。', 'error');
         }
     }
 
