@@ -48,21 +48,27 @@
         }
         .btn-row { display: flex; gap: 12px; margin-top: 16px; }
         .btn {
-            padding: 12px 24px; border-radius: 10px; font-weight: 700;
+            padding: 12px 20px; border-radius: 10px; font-weight: 700;
             font-size: 15px; font-family: inherit; cursor: pointer; border: none;
             transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
         }
         .btn:active { transform: scale(0.97); }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .btn-primary {
-            width: 100%; background: var(--primary-dark); color: white;
-            box-shadow: 0 4px 14px rgba(14,165,233,0.25);
-        }
+        .btn-primary { flex: 1; background: var(--primary-dark); color: white; box-shadow: 0 4px 14px rgba(14,165,233,0.25); }
         .btn-primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(14,165,233,0.35); }
+        .btn-camera {
+            background: #f1f5f9; color: var(--text);
+            border: 1px solid var(--border); white-space: nowrap;
+        }
+        .btn-camera:hover { background: #e2e8f0; }
         .spinner {
             border: 2.5px solid rgba(255,255,255,0.3); border-top: 2.5px solid white;
             border-radius: 50%; width: 16px; height: 16px; animation: spin 0.7s linear infinite;
             display: inline-block; vertical-align: middle;
+        }
+        .spinner-dark {
+            border-color: rgba(0,0,0,0.1); border-top-color: var(--primary-dark);
         }
         @keyframes spin { to { transform: rotate(360deg); } }
         #status {
@@ -71,36 +77,149 @@
         }
         #status.error { display: block; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
         #status.loading { display: block; background: #f0f9ff; color: #075985; border: 1px solid #bae6fd; }
+        #status.success { display: block; background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+
+        .photo-area {
+            margin-top: 12px; display: none;
+        }
+        .photo-preview {
+            position: relative; display: inline-block; border-radius: 10px;
+            overflow: hidden; border: 1px solid var(--border);
+        }
+        .photo-preview img { display: block; max-height: 180px; max-width: 100%; }
+        .photo-preview .ocr-overlay {
+            position: absolute; inset: 0; background: rgba(0,0,0,0.5);
+            display: flex; align-items: center; justify-content: center;
+            color: white; font-size: 14px; font-weight: 600;
+        }
+        .photo-actions { display: flex; gap: 8px; margin-top: 8px; }
+        .btn-sm {
+            padding: 8px 14px; font-size: 13px; border-radius: 8px; font-weight: 600;
+            font-family: inherit; cursor: pointer; border: none;
+            background: #f1f5f9; color: var(--text);
+            transition: background 0.15s;
+        }
+        .btn-sm:hover { background: #e2e8f0; }
+        .btn-sm.danger { color: #dc2626; }
+        .btn-sm.danger:hover { background: #fef2f2; }
     </style>
 </head>
 <body>
 <div class="container">
     <div class="header">
         <h1>Edulab</h1>
-        <p>输入立体几何题，生成可交互 3D 解题页</p>
+        <p>拍照或输入立体几何题，生成可交互 3D 解题页</p>
     </div>
     <div class="card">
         <label>题目描述</label>
         <textarea id="problem-input" rows="4" placeholder="例如：正方体 ABCD-A1B1C1D1 棱长为 2，求直线 AC1 与平面 BDD1B1 所成角的正弦值。">正方体 ABCD-A1B1C1D1 棱长为 2，求直线 AC1 与平面 BDD1B1 所成角的正弦值。</textarea>
+
+        <div class="photo-area" id="photo-area">
+            <div class="photo-preview" id="photo-preview">
+                <img id="photo-img" src="" alt="题目照片">
+            </div>
+            <div class="photo-actions">
+                <button class="btn-sm danger" id="btn-retake">删除重拍</button>
+            </div>
+        </div>
+
         <div class="btn-row">
             <button id="btn-generate" class="btn btn-primary">生成解题页</button>
+            <button id="btn-camera" class="btn btn-camera">📷 拍照识别</button>
         </div>
         <div id="status"></div>
     </div>
 </div>
 
+<!-- Hidden file input -->
+<input type="file" id="file-input" accept="image/*" capture="environment" style="display:none">
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js">
+</script>
+
 <script>
     const API_BASE = '';
     const $status = document.getElementById('status');
     const $btn = document.getElementById('btn-generate');
+    const $textarea = document.getElementById('problem-input');
+    const $photoArea = document.getElementById('photo-area');
+    const $photoImg = document.getElementById('photo-img');
+    const $fileInput = document.getElementById('file-input');
+
+    let ocrWorker = null;
+    let currentImageFile = null;
 
     function setStatus(msg, type) {
         $status.textContent = msg;
         $status.className = type;
     }
 
+    // ---- 拍照 / 上传 ----
+    document.getElementById('btn-camera').addEventListener('click', () => {
+        $fileInput.click();
+    });
+
+    $fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        currentImageFile = file;
+
+        // Show preview
+        $photoImg.src = URL.createObjectURL(file);
+        $photoArea.style.display = 'block';
+        $status.className = '';
+
+        // Run OCR
+        await runOCR(file);
+    });
+
+    document.getElementById('btn-retake').addEventListener('click', () => {
+        currentImageFile = null;
+        $photoImg.src = '';
+        $photoArea.style.display = 'none';
+        $fileInput.value = '';
+        $status.className = '';
+    });
+
+    // ---- OCR ----
+    async function runOCR(file) {
+        setStatus('正在加载 OCR 引擎（首次约需下载 10MB 中文语言包）...', 'loading');
+
+        try {
+            if (!ocrWorker) {
+                ocrWorker = await Tesseract.createWorker('chi_sim', 1, {
+                    logger: m => {
+                        if (m.status === 'recognizing text') {
+                            const pct = Math.round(m.progress * 100);
+                            setStatus(`OCR 识别中... ${pct}%`, 'loading');
+                        } else if (m.status === 'loading tesseract core' || m.status === 'initializing tesseract') {
+                            setStatus('加载 OCR 引擎...', 'loading');
+                        } else if (m.status === 'loading language traineddata') {
+                            setStatus('下载中文语言包...', 'loading');
+                        }
+                    }
+                });
+            }
+
+            const { data: { text } } = await ocrWorker.recognize(file);
+            const cleaned = text.replace(/\s+/g, ' ').trim();
+
+            if (cleaned) {
+                $textarea.value = cleaned;
+                $textarea.focus();
+                setStatus('识别完成，请核对后点击「生成解题页」', 'success');
+            } else {
+                setStatus('未识别到文字，请手动输入或重新拍照', 'error');
+            }
+        } catch (err) {
+            console.error('OCR error:', err);
+            setStatus('OCR 失败：' + err.message + '，请手动输入题目', 'error');
+        }
+    }
+
+    // ---- 生成解题页 ----
     document.getElementById('btn-generate').addEventListener('click', async () => {
-        const input = document.getElementById('problem-input').value.trim();
+        const input = $textarea.value.trim();
         if (!input) { alert('请输入题目'); return; }
 
         $btn.disabled = true;
