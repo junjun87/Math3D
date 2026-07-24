@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>立体几何交互教学</title>
+    <style>
+        :root {
+            --primary: #0ea5e9;
+            --primary-dark: #0284c7;
+            --accent: #d946ef;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --surface-soft: #f1f5f9;
+            --text: #0f172a;
+            --muted: #475569;
+            --border: #e2e8f0;
+            --ring: rgba(14, 165, 233, 0.24);
+            --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.08);
+            --panel-shadow: 0 18px 42px rgba(15, 23, 42, 0.09);
+        }
+        * { box-sizing: border-box; }
+        html, body {
+            margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+        }
+        body {
+            font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: #edf3f8; color: var(--text);
+            display: flex; gap: 10px; padding: 10px;
+        }
+        button { font: inherit; }
+
+        .skip-link {
+            position: fixed; left: 16px; top: 16px; z-index: 999;
+            padding: 10px 14px; border-radius: 8px; background: var(--text);
+            color: white; text-decoration: none;
+            transform: translateY(-140%); transition: transform 0.2s ease;
+        }
+        .skip-link:focus { transform: translateY(0); outline: 3px solid var(--ring); }
+
+        #sidebar {
+            width: 420px; background: var(--surface);
+            border: 1px solid rgba(226,232,240,0.95); border-radius: 24px;
+            display: flex; flex-direction: column; z-index: 10;
+            overflow: hidden; box-shadow: var(--panel-shadow);
+        }
+        .content-wrapper {
+            flex: 1; display: grid;
+            grid-template-rows: auto minmax(0, 1fr);
+            grid-template-columns: minmax(0, 1fr);
+            gap: 12px; min-height: 0; overflow: hidden; padding: 16px;
+        }
+        .lesson-header { display: grid; gap: 12px; }
+        .content-card {
+            min-width: 0; padding: 14px; border: 1px solid rgba(226,232,240,0.95);
+            border-radius: 14px; background: #ffffff;
+            box-shadow: 0 10px 28px rgba(15,23,42,0.05);
+        }
+        .problem-card { display: grid; gap: 10px; }
+        .lesson-meta {
+            display: flex; align-items: center; gap: 8px;
+            color: var(--primary-dark); font-size: 12px; font-weight: 800;
+        }
+        .lesson-meta::before {
+            content: ""; width: 8px; height: 8px; border-radius: 999px;
+            background: var(--primary);
+            box-shadow: 0 0 0 4px rgba(14,165,233,0.12);
+        }
+        h1 { font-size: 21px; font-weight: 700; margin: 0; color: var(--text); line-height: 1.4; }
+
+        .answer-card {
+            display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center;
+            border: 1px solid #bae6fd; background: #f8fbff; box-shadow: var(--shadow-soft);
+        }
+        .answer-card span { display: block; color: var(--muted); font-size: 12px; font-weight: 700; }
+        .answer-card strong { display: block; color: var(--text); font-size: 14px; font-weight: 700; line-height: 1.45; }
+        .answer-value {
+            min-width: 96px; padding: 9px 12px; border-radius: 10px;
+            background: var(--text); color: white; text-align: center;
+            font-size: 20px; font-weight: 800; white-space: nowrap;
+            box-shadow: 0 10px 22px rgba(15,23,42,0.18);
+        }
+        .answer-value mjx-container { color: white; }
+        .btn:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+        .step-badge {
+            justify-self: start; display: inline-block;
+            background: var(--primary-dark); color: white;
+            padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; margin-bottom: 0;
+        }
+        .solution-card {
+            display: grid; grid-template-rows: auto minmax(0, 1fr);
+            grid-template-columns: minmax(0, 1fr);
+            gap: 12px; min-height: 0; overflow: hidden;
+        }
+
+        #step-container {
+            min-height: 0; overflow: auto; padding-right: 6px;
+            scrollbar-gutter: stable; scrollbar-width: thin;
+            scrollbar-color: rgba(14,165,233,0.7) rgba(226,232,240,0.75);
+            -webkit-overflow-scrolling: touch;
+            opacity: 1; transform: translateY(0);
+            transition: opacity 0.28s ease, transform 0.28s ease;
+        }
+        #step-container::-webkit-scrollbar { width: 10px; height: 10px; }
+        #step-container::-webkit-scrollbar-track { background: rgba(226,232,240,0.72); border-radius: 999px; }
+        #step-container::-webkit-scrollbar-thumb {
+            min-height: 36px; border: 2px solid rgba(226,232,240,0.72); border-radius: 999px;
+            background: linear-gradient(180deg, rgba(14,165,233,0.86), rgba(2,132,199,0.86));
+        }
+        #step-container::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, rgba(2,132,199,0.95), rgba(3,105,161,0.95));
+        }
+        #step-container::-webkit-scrollbar-corner { background: transparent; }
+        #step-container.is-changing { opacity: 0; transform: translateY(6px); }
+
+        .step-title { font-size: 18px; font-weight: 600; margin-bottom: 16px; color: var(--primary-dark); }
+        .step-content { font-size: 15px; line-height: 1.8; color: #334155; }
+        .step-content mjx-container[display="true"] {
+            max-width: 100%; overflow-x: auto; overflow-y: hidden;
+            overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+        }
+        .step-content mjx-container[display="true"].is-scrollable {
+            overflow-x: scroll; padding-bottom: 10px;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(14,165,233,0.85) rgba(226,232,240,0.9);
+            cursor: grab; touch-action: pan-x;
+        }
+        .step-content mjx-container[display="true"].is-scrollable.is-dragging {
+            cursor: grabbing; -webkit-user-select: none; user-select: none;
+        }
+        .step-content mjx-container[display="true"].is-scrollable::-webkit-scrollbar { -webkit-appearance: none; height: 9px; }
+        .step-content mjx-container[display="true"].is-scrollable::-webkit-scrollbar-thumb {
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(14,165,233,0.95), rgba(2,132,199,0.95));
+        }
+        .step-content p, .step-content li {
+            overflow-x: auto; overflow-y: hidden;
+            scrollbar-width: thin; scrollbar-color: rgba(14,165,233,0.6) transparent;
+        }
+        .step-content p::-webkit-scrollbar, .step-content li::-webkit-scrollbar { height: 6px; }
+        .step-content p::-webkit-scrollbar-thumb, .step-content li::-webkit-scrollbar-thumb {
+            border-radius: 999px; background: rgba(14,165,233,0.6);
+        }
+
+        .math-term {
+            background: var(--surface-soft); padding: 2px 6px;
+            border-radius: 4px; color: var(--primary-dark);
+            font-weight: 500; font-size: 0.9em;
+        }
+
+        .nav-bar {
+            padding: 16px 20px; border-top: 1px solid var(--border);
+            display: flex; justify-content: space-between; gap: 12px;
+            background: rgba(255,255,255,0.92); backdrop-filter: blur(14px);
+        }
+        .btn {
+            padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;
+            transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+            border: none; font-size: 14px;
+        }
+        .btn-prev { background: #f1f5f9; color: #64748b; }
+        .btn-prev:hover { background: #e2e8f0; color: #475569; }
+        .btn-next { background: var(--primary-dark); color: white; box-shadow: 0 4px 12px rgba(14,165,233,0.2); }
+        .btn-next:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(14,165,233,0.3); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        #canvas-container {
+            flex: 1; position: relative; background: #f8fafc; min-width: 0;
+            border: 1px solid rgba(226,232,240,0.95); border-radius: 24px;
+            overflow: hidden; box-shadow: var(--panel-shadow);
+        }
+        .label {
+            font-size: 14px; font-weight: 700; color: var(--text);
+            text-shadow: -2px -2px 0 #fff, 2px -2px 0 #fff, -2px 2px 0 #fff, 2px 2px 0 #fff;
+            pointer-events: none; user-select: none; font-family: sans-serif;
+        }
+        .measure-label {
+            font-size: 13px; font-weight: 700; color: var(--primary-dark);
+            background: rgba(255,255,255,0.86); padding: 1px 7px;
+            border-radius: 7px; border: 1px solid #bae6fd;
+            box-shadow: 0 2px 8px rgba(15,23,42,0.08);
+            pointer-events: none; user-select: none; white-space: nowrap; line-height: 1.4;
+        }
+
+        #measure-toggle {
+            position: absolute; left: 20px; top: 20px; z-index: 100;
+            padding: 8px 14px; border: 1px solid var(--border); border-radius: 999px;
+            background: rgba(255,255,255,0.92); color: var(--muted);
+            font-size: 13px; font-weight: 700; cursor: pointer;
+            box-shadow: 0 4px 20px rgba(15,23,42,0.08);
+            transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+        }
+        #measure-toggle.is-on { background: var(--primary-dark); color: #fff; border-color: var(--primary-dark); }
+        #measure-toggle:hover { box-shadow: 0 6px 22px rgba(15,23,42,0.14); }
+        #measure-toggle:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
+
+        .tip-bubble {
+            position: absolute; top: 20px; right: 20px;
+            background: white; padding: 12px 16px; border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08); font-size: 13px;
+            color: #64748b; display: flex; align-items: center; gap: 8px;
+            pointer-events: none; z-index: 100;
+        }
+        .canvas-toolbar {
+            position: absolute; top: 20px; right: 20px; z-index: 101;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .btn-dl {
+            padding: 10px 16px; border-radius: 10px; font-weight: 700; font-size: 13px;
+            font-family: inherit; cursor: pointer; border: none;
+            background: var(--primary-dark); color: white;
+            box-shadow: 0 4px 14px rgba(14,165,233,0.25);
+            display: flex; align-items: center; gap: 6px;
+            transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+        }
+        .btn-dl:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(14,165,233,0.35); }
+        .btn-dl:active { transform: scale(0.97); }
+
+        .readout-panel {
+            position: absolute; left: 20px; bottom: 20px;
+            background: rgba(255,255,255,0.96); padding: 12px 14px;
+            border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.10);
+            font-size: 13px; color: #334155; min-width: 190px; z-index: 100;
+        }
+        .readout-title { font-size: 12px; font-weight: 700; color: var(--primary-dark); margin-bottom: 8px; }
+        .readout-row { display: flex; justify-content: space-between; gap: 16px; padding: 3px 0; }
+        .readout-row b { color: var(--text); font-variant-numeric: tabular-nums; }
+
+        @media (max-width: 640px) {
+            body { flex-direction: column-reverse; gap: 8px; padding: 8px; }
+            #sidebar { width: 100%; flex: 0 0 52vh; border-radius: 20px; box-shadow: var(--panel-shadow); }
+            #canvas-container { flex: 1 1 auto; height: auto; border-radius: 20px; }
+            .content-wrapper { gap: 10px; padding: 10px; }
+            .lesson-header { gap: 10px; }
+            .content-card { padding: 12px; border-radius: 12px; }
+            .lesson-meta { font-size: 11px; }
+            h1 { font-size: 16px; line-height: 1.32; }
+            .answer-card { grid-template-columns: 1fr auto; gap: 10px; }
+            .answer-card span { font-size: 11px; }
+            .answer-card strong { font-size: 12px; }
+            .answer-value { min-width: 74px; padding: 7px 9px; font-size: 16px; }
+            .solution-card { gap: 10px; }
+            .step-title { margin-bottom: 10px; font-size: 16px; }
+            .step-content { font-size: 14px; line-height: 1.65; }
+            .nav-bar { padding: 10px 14px; }
+            .tip-bubble { top: 14px; right: 14px; max-width: calc(100% - 28px); }
+            .canvas-toolbar { top: 14px; right: 14px; gap: 8px; }
+            .btn-dl { font-size: 12px; padding: 8px 12px; }
+            #measure-toggle { left: 14px; top: 14px; font-size: 12px; padding: 6px 11px; }
+            .readout-panel { left: 14px; bottom: 14px; font-size: 12px; min-width: 150px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                scroll-behavior: auto !important;
+                transition-duration: 0.01ms !important;
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+            }
+        }
+    </style>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+        }
+    }
+    </script>
+
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['$','$']], displayMath: [['$$','$$']], processEscapes: true, processEnvironments: true },
+            options: { skipHtmlTags: ['script','noscript','style','textarea','pre'] },
+            startup: { pageReady: () => MathJax.startup.defaultPageReady().then(() => console.log('MathJax ready')) }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <script id="lesson-data" type="application/json">__LESSON_DATA__</script>
+</head>
+<body>
+    <a class="skip-link" id="skip-link" href="#step-container">跳到解题步骤</a>
+
+    <aside id="sidebar" aria-label="立体几何解题步骤面板">
+        <div class="content-wrapper">
+            <header class="lesson-header">
+                <section class="problem-card content-card" aria-labelledby="lesson-title">
+                    <div class="lesson-meta" id="lesson-meta">交互解题</div>
+                    <h1 id="lesson-title"></h1>
+                </section>
+                <section class="answer-card content-card" id="answer-card" aria-label="最终答案">
+                    <div>
+                        <span id="answer-title">最终答案</span>
+                        <strong id="answer-summary"></strong>
+                    </div>
+                    <div class="answer-value" id="answer-value"></div>
+                </section>
+            </header>
+            <section class="solution-card content-card" id="solution-card" aria-label="解题步骤">
+                <div id="step-indicator" class="step-badge"></div>
+                <div id="step-container" role="region" aria-live="polite" tabindex="-1"></div>
+            </section>
+        </div>
+        <div class="nav-bar">
+            <button id="prev-btn" class="btn btn-prev" type="button" aria-controls="step-container" disabled>上一步</button>
+            <button id="next-btn" class="btn btn-next" type="button" aria-controls="step-container">下一步</button>
+        </div>
+    </aside>
+
+    <div id="canvas-container" role="img" aria-label="立体几何三维交互演示">
+        <div class="canvas-toolbar">
+            <div class="tip-bubble" style="position:static;box-shadow:none;padding:0;pointer-events:auto;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+                </svg>
+                <span id="interaction-tip">左键旋转 · 滚轮缩放 · 右键平移</span>
+            </div>
+            <button id="download-btn" class="btn-dl" type="button" title="下载 HTML 文件">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                下载 HTML
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+        const DATA = JSON.parse(document.getElementById('lesson-data').textContent);
+        const lesson = DATA.lesson;
+        const steps = DATA.steps;
+        const model = DATA.model;
+
+        const defaultUI = {
+            pageTitle: lesson.title,
+            skipToSteps: "跳到解题步骤",
+            sidebarLabel: "立体几何解题步骤面板",
+            answerCardLabel: "最终答案",
+            answerTitle: "最终答案",
+            solutionCardLabel: "解题步骤",
+            sceneLabel: "立体几何三维交互演示",
+            interactionTip: "左键旋转 · 滚轮缩放 · 右键平移",
+            previous: "上一步",
+            next: "下一步",
+            finish: "完成",
+            stepTemplate: "步骤 {current} / {total}",
+            finishAria: "完成解题",
+            nextAriaTemplate: "进入步骤 {step}",
+            previousAriaTemplate: "返回步骤 {step}",
+            firstStepAria: "已经是第一步",
+            measureToggleOn: "长度标注：开",
+            measureToggleOff: "长度标注：关"
+        };
+        const ui = { ...defaultUI, ...(lesson.ui || {}) };
+
+        const COLORS = {
+            frame: 0x64748b, aux: 0x94a3b8, emphasis: 0xd946ef,
+            normal: 0xef4444, plane: 0x0ea5e9, point: 0x0f172a
+        };
+        function colorOf(name, fallback) {
+            return (name != null && COLORS[name] != null) ? COLORS[name] : fallback;
+        }
+
+        const SCALE = model.scale || 1;
+        function threeFromMath(p) { return new THREE.Vector3(p[0]*SCALE, p[2]*SCALE, p[1]*SCALE); }
+
+        let scene, camera, renderer, labelRenderer, controls;
+        let currentStep = 0;
+        let measuresOn = true;
+        const objects = {};
+        const POINTS = {};
+        const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const cameraTargetPoint = new THREE.Vector3(...(model.target || [0, 0.45, 0]));
+        let targetCameraPosition = null;
+
+        // ---- UI text init ----
+        function initializeLessonText() {
+            document.documentElement.lang = lesson.language || 'zh-CN';
+            document.title = ui.pageTitle || lesson.title;
+            document.getElementById('skip-link').textContent = ui.skipToSteps;
+            document.getElementById('sidebar').setAttribute('aria-label', ui.sidebarLabel);
+            document.getElementById('answer-card').setAttribute('aria-label', ui.answerCardLabel);
+            document.getElementById('answer-title').textContent = ui.answerTitle;
+            document.getElementById('solution-card').setAttribute('aria-label', ui.solutionCardLabel);
+            document.getElementById('canvas-container').setAttribute('aria-label', ui.sceneLabel);
+            document.getElementById('interaction-tip').textContent = ui.interactionTip;
+            document.getElementById('prev-btn').textContent = ui.previous;
+            document.getElementById('lesson-meta').textContent = lesson.meta || '';
+            document.getElementById('lesson-title').textContent = lesson.title;
+            document.getElementById('answer-summary').textContent = lesson.answerLabel || '';
+            const av = document.getElementById('answer-value');
+            av.innerHTML = lesson.answerValue || '';
+            typesetMath(av);
+        }
+
+        // ---- Math helpers ----
+        function markScrollableMath(root) {
+            const blocks = root.querySelectorAll('.step-content mjx-container[display="true"]');
+            blocks.forEach(el => {
+                const overflowing = el.scrollWidth - el.clientWidth > 1;
+                el.classList.toggle('is-scrollable', overflowing);
+            });
+        }
+
+        function typesetMath(container) {
+            const run = () => {
+                if (window.MathJax && window.MathJax.typesetPromise) {
+                    MathJax.typesetPromise([container])
+                        .then(() => markScrollableMath(container))
+                        .catch(err => console.log(err));
+                } else { setTimeout(run, 120); }
+            };
+            run();
+        }
+
+        function enableDragScroll(scope) {
+            let dragEl = null, startX = 0, startScroll = 0, pointerId = null, moved = false;
+            function findScrollable(target) {
+                let el = target;
+                while (el && el !== scope) {
+                    if (el.scrollWidth - el.clientWidth > 1) {
+                        const ox = getComputedStyle(el).overflowX;
+                        if (ox === 'auto' || ox === 'scroll') return el;
+                    }
+                    el = el.parentElement;
+                }
+                return null;
+            }
+            scope.addEventListener('pointerdown', e => {
+                if (e.pointerType === 'touch') return;
+                const el = findScrollable(e.target);
+                if (!el) return;
+                dragEl = el; startX = e.clientX; startScroll = el.scrollLeft;
+                pointerId = e.pointerId; moved = false;
+                el.classList.add('is-dragging');
+                try { el.setPointerCapture(pointerId); } catch (_) {}
+            });
+            scope.addEventListener('pointermove', e => {
+                if (!dragEl) return;
+                if (Math.abs(e.clientX - startX) > 2) moved = true;
+                dragEl.scrollLeft = startScroll - (e.clientX - startX);
+                e.preventDefault();
+            });
+            function end() {
+                if (!dragEl) return;
+                try { dragEl.releasePointerCapture(pointerId); } catch (_) {}
+                dragEl.classList.remove('is-dragging');
+                dragEl = null; pointerId = null;
+            }
+            scope.addEventListener('pointerup', end);
+            scope.addEventListener('pointercancel', end);
+            scope.addEventListener('lostpointercapture', end);
+            scope.addEventListener('click', e => {
+                if (moved) { e.stopPropagation(); e.preventDefault(); moved = false; }
+            }, true);
+        }
+
+        // ---- Geometry builders ----
+        function v3(arr) { return new THREE.Vector3(arr[0], arr[1], arr[2]); }
+        function pt(nameOrCoords) { return Array.isArray(nameOrCoords) ? v3(nameOrCoords) : POINTS[nameOrCoords].clone(); }
+
+        function makeTubeSegment(p1, p2, radius, material) {
+            const dir = new THREE.Vector3().subVectors(p2, p1);
+            const geo = new THREE.CylinderGeometry(radius, radius, dir.length(), 14);
+            const mesh = new THREE.Mesh(geo, material);
+            mesh.position.copy(new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5));
+            mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
+            return mesh;
+        }
+
+        function makeLine(p1, p2, color, dashed, emphasis) {
+            const mat = new THREE.MeshBasicMaterial({ color });
+            if (dashed) {
+                const group = new THREE.Group();
+                const dir = new THREE.Vector3().subVectors(p2, p1);
+                const len = dir.length(), unit = dir.clone().normalize();
+                const dash = 0.22, gap = 0.13, r = 0.0055;
+                for (let s = 0; s < len; s += dash + gap) {
+                    const e = Math.min(s + dash, len);
+                    group.add(makeTubeSegment(
+                        p1.clone().add(unit.clone().multiplyScalar(s)),
+                        p1.clone().add(unit.clone().multiplyScalar(e)), r, mat));
+                }
+                return group;
+            }
+            return makeTubeSegment(p1, p2, emphasis ? 0.012 : 0.0075, mat);
+        }
+
+        function makePlane(pts) {
+            const geo = new THREE.BufferGeometry();
+            const flat = []; pts.forEach(p => flat.push(p.x, p.y, p.z));
+            geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(flat), 3));
+            if (pts.length === 3) geo.setIndex([0,1,2]);
+            else if (pts.length === 4) geo.setIndex([0,1,2,0,2,3]);
+            return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+                color: COLORS.plane, side: THREE.DoubleSide, transparent: true, opacity: 0.2
+            }));
+        }
+
+        function createElementObj(el) {
+            let obj = null;
+            if (el.type === 'line') {
+                obj = makeLine(pt(el.a), pt(el.b), colorOf(el.color, COLORS.emphasis), !!el.dashed, true);
+                if (el.depthTest === false) {
+                    const fn = m => { if (m.material) { m.material.depthTest = false; m.renderOrder = 1; } };
+                    obj.isGroup ? obj.children.forEach(fn) : fn(obj);
+                }
+            } else if (el.type === 'plane') {
+                obj = makePlane((el.pts || []).map(p => pt(p)));
+            } else if (el.type === 'arrow') {
+                const dir = v3(el.dir).normalize();
+                obj = new THREE.ArrowHelper(dir, pt(el.origin), el.length || 1.5,
+                    colorOf(el.color, COLORS.normal), 0.2, 0.1);
+            } else if (el.type === 'axes') {
+                obj = new THREE.AxesHelper(el.size || 3);
+            } else if (el.type === 'sphere') {
+                const pos = pt(el.pt);
+                const geo = new THREE.SphereGeometry(el.radius || 0.15, 18, 18);
+                const mat = new THREE.MeshPhongMaterial({ color: colorOf(el.color, COLORS.emphasis) });
+                obj = new THREE.Mesh(geo, mat); obj.position.copy(pos);
+            } else if (el.type === 'measure') {
+                const mid = pt(el.a).add(pt(el.b)).multiplyScalar(0.5);
+                const target = v3(model.target || [0,0.45,0]);
+                let dir = mid.clone().sub(target);
+                if (dir.lengthSq() < 1e-6) dir.set(0,1,0);
+                dir.normalize().multiplyScalar(el.offset != null ? el.offset : 0.24);
+                const div = document.createElement('div');
+                div.className = 'measure-label';
+                div.innerHTML = '$' + (el.label != null ? el.label : '') + '$';
+                obj = new CSS2DObject(div);
+                obj.position.copy(mid.add(dir));
+            }
+            return obj;
+        }
+
+        // ---- Build model ----
+        function buildModel() {
+            for (const [name, coords] of Object.entries(model.points)) POINTS[name] = v3(coords);
+
+            const sphereNames = model.spheres || Object.keys(model.points);
+            sphereNames.forEach(name => {
+                const geo = new THREE.SphereGeometry(0.06, 18, 18);
+                const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: COLORS.point }));
+                mesh.position.copy(POINTS[name]);
+                scene.add(mesh);
+                objects['Point_' + name] = mesh;
+
+                const div = document.createElement('div');
+                div.className = 'label'; div.textContent = name; div.style.marginTop = '-1em';
+                const label = new CSS2DObject(div);
+                label.position.set(0, 0.15, 0);
+                mesh.add(label);
+            });
+
+            const frame = new THREE.Group();
+            (model.edges || []).forEach(e => {
+                frame.add(makeLine(pt(e.a), pt(e.b), colorOf(e.color, COLORS.frame), !!e.dashed));
+                if (e.name) objects[e.name] = frame.children[frame.children.length - 1];
+            });
+            scene.add(frame);
+            objects['Frame'] = frame;
+
+            for (const [key, el] of Object.entries(model.elements || {})) {
+                const obj = createElementObj(el);
+                if (obj) { obj.visible = false; scene.add(obj); objects[key] = obj; }
+            }
+        }
+
+        // ---- Measure toggle ----
+        function buildMeasureToggle() {
+            const elements = model.elements || {};
+            const hasMeasure = Object.values(elements).some(el => el.type === 'measure');
+            if (!hasMeasure) return;
+            const btn = document.createElement('button');
+            btn.id = 'measure-toggle'; btn.type = 'button';
+            const sync = () => {
+                btn.textContent = measuresOn ? ui.measureToggleOn : ui.measureToggleOff;
+                btn.classList.toggle('is-on', measuresOn);
+                btn.setAttribute('aria-pressed', String(measuresOn));
+            };
+            sync();
+            btn.addEventListener('click', () => { measuresOn = !measuresOn; sync(); updateSceneState(); });
+            document.getElementById('canvas-container').appendChild(btn);
+        }
+
+        // ---- Step navigation ----
+        function updateSceneState() {
+            const stepData = steps[currentStep];
+            for (const key of Object.keys(model.elements || {})) {
+                if (objects[key]) objects[key].visible = false;
+            }
+            if (Array.isArray(stepData.highlight)) {
+                stepData.highlight.forEach(key => {
+                    if (!objects[key]) return;
+                    const el = (model.elements || {})[key];
+                    if (el && el.type === 'measure' && !measuresOn) return;
+                    objects[key].visible = true;
+                });
+            }
+            if (stepData.cameraPos) {
+                targetCameraPosition = new THREE.Vector3(stepData.cameraPos.x, stepData.cameraPos.y, stepData.cameraPos.z);
+            }
+            labelRenderer.render(scene, camera);
+            typesetMath(document.getElementById('canvas-container'));
+        }
+
+        function goToStep(idx) {
+            currentStep = Math.max(0, Math.min(idx, steps.length - 1));
+            const stepData = steps[currentStep];
+            document.getElementById('step-indicator').textContent = ui.stepTemplate
+                .replace('{current}', currentStep + 1).replace('{total}', steps.length);
+
+            const container = document.getElementById('step-container');
+            container.innerHTML = `<div class="step-title">${stepData.title}</div><div class="step-content">${stepData.content}</div>`;
+            container.scrollTop = 0;
+            typesetMath(document.getElementById('sidebar'));
+
+            if (!prefersReducedMotion) {
+                container.getAnimations().forEach(a => a.cancel());
+                container.animate([
+                    { opacity: 0, transform: 'translateY(8px)' },
+                    { opacity: 1, transform: 'translateY(0)' }
+                ], { duration: 280, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+            }
+
+            document.getElementById('prev-btn').disabled = currentStep === 0;
+            const isLast = currentStep === steps.length - 1;
+            document.getElementById('next-btn').textContent = isLast ? ui.finish : ui.next;
+            document.getElementById('next-btn').setAttribute('aria-label',
+                isLast ? ui.finishAria : ui.nextAriaTemplate.replace('{step}', currentStep + 2));
+            document.getElementById('prev-btn').setAttribute('aria-label',
+                currentStep === 0 ? ui.firstStepAria : ui.previousAriaTemplate.replace('{step}', currentStep));
+
+            updateSceneState();
+        }
+
+        // ---- Init ----
+        function init() {
+            const container = document.getElementById('canvas-container');
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf8fafc);
+            scene.fog = new THREE.Fog(0xf8fafc, 10, 50);
+
+            camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+            const ic = model.initialCamera || [5, 4, 5];
+            camera.position.set(ic[0], ic[1], ic[2]);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            labelRenderer = new CSS2DRenderer();
+            labelRenderer.setSize(container.clientWidth, container.clientHeight);
+            labelRenderer.domElement.style.position = 'absolute';
+            labelRenderer.domElement.style.top = '0px';
+            labelRenderer.domElement.style.pointerEvents = 'none';
+            container.appendChild(labelRenderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = !prefersReducedMotion;
+            controls.dampingFactor = 0.05;
+
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(5, 10, 7);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            scene.add(new THREE.GridHelper(20, 20, 0xcbd5e1, 0xe2e8f0));
+
+            buildModel();
+
+            window.addEventListener('resize', () => {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+                labelRenderer.setSize(container.clientWidth, container.clientHeight);
+                markScrollableMath(document.getElementById('sidebar'));
+            });
+
+            initializeLessonText();
+            enableDragScroll(document.getElementById('step-container'));
+            if (steps.length > 0) goToStep(0);
+            labelRenderer.render(scene, camera);
+            typesetMath(document.getElementById('canvas-container'));
+            buildMeasureToggle();
+            animate();
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (targetCameraPosition) {
+                camera.position.lerp(targetCameraPosition, 0.07);
+                controls.target.lerp(cameraTargetPoint, 0.07);
+                if (camera.position.distanceTo(targetCameraPosition) < 0.015) {
+                    camera.position.copy(targetCameraPosition);
+                    controls.target.copy(cameraTargetPoint);
+                    targetCameraPosition = null;
+                }
+            }
+            controls.update();
+            renderer.render(scene, camera);
+            labelRenderer.render(scene, camera);
+        }
+
+        document.getElementById('prev-btn').addEventListener('click', () => {
+            if (currentStep > 0) goToStep(currentStep - 1);
+        });
+        document.getElementById('next-btn').addEventListener('click', () => {
+            if (currentStep < steps.length - 1) goToStep(currentStep + 1);
+        });
+        document.getElementById('download-btn').addEventListener('click', () => {
+            const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+            const blob = new Blob([html], { type: 'text/html' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = (lesson.title || 'solid-geometry-solution').replace(/[^a-zA-Z0-9一-鿿_-]/g, '-').slice(0, 40) + '.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        });
+
+        init();
+    </script>
+</body>
+</html>

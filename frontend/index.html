@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edulab — 立体几何交互解题</title>
+    <style>
+        :root {
+            --primary: #0ea5e9;
+            --primary-dark: #0284c7;
+            --accent: #d946ef;
+            --bg: #edf3f8;
+            --surface: #ffffff;
+            --text: #0f172a;
+            --muted: #475569;
+            --border: #e2e8f0;
+            --shadow-soft: 0 18px 45px rgba(15,23,42,0.08);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: var(--bg); color: var(--text);
+        }
+        .container { width: 100%; max-width: 540px; padding: 20px; }
+        .header { text-align: center; margin-bottom: 32px; }
+        .header h1 {
+            font-size: 36px; font-weight: 800; margin: 0 0 8px;
+            background: linear-gradient(135deg, var(--primary-dark), var(--accent));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .header p { color: var(--muted); font-size: 15px; margin: 0; }
+        .card {
+            background: var(--surface); border-radius: 20px; padding: 24px;
+            border: 1px solid rgba(226,232,240,0.95);
+            box-shadow: var(--shadow-soft);
+        }
+        .card label { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+        .card textarea {
+            width: 100%; border: 1px solid var(--border); border-radius: 12px;
+            padding: 14px; font-size: 15px; font-family: inherit; line-height: 1.6;
+            resize: vertical; color: var(--text); background: #f8fafc;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .card textarea:focus {
+            outline: none; border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(14,165,233,0.12);
+        }
+        .btn-row { display: flex; gap: 12px; margin-top: 16px; }
+        .btn {
+            padding: 12px 24px; border-radius: 10px; font-weight: 700;
+            font-size: 15px; font-family: inherit; cursor: pointer; border: none;
+            transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+        }
+        .btn:active { transform: scale(0.97); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-primary {
+            width: 100%; background: var(--primary-dark); color: white;
+            box-shadow: 0 4px 14px rgba(14,165,233,0.25);
+        }
+        .btn-primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(14,165,233,0.35); }
+        .spinner {
+            border: 2.5px solid rgba(255,255,255,0.3); border-top: 2.5px solid white;
+            border-radius: 50%; width: 16px; height: 16px; animation: spin 0.7s linear infinite;
+            display: inline-block; vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #status {
+            margin-top: 16px; padding: 12px 16px; border-radius: 12px;
+            font-size: 14px; text-align: center; display: none;
+        }
+        #status.error { display: block; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
+        #status.loading { display: block; background: #f0f9ff; color: #075985; border: 1px solid #bae6fd; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Edulab</h1>
+        <p>输入立体几何题，生成可交互 3D 解题页</p>
+    </div>
+    <div class="card">
+        <label>题目描述</label>
+        <textarea id="problem-input" rows="4" placeholder="例如：正方体 ABCD-A1B1C1D1 棱长为 2，求直线 AC1 与平面 BDD1B1 所成角的正弦值。">正方体 ABCD-A1B1C1D1 棱长为 2，求直线 AC1 与平面 BDD1B1 所成角的正弦值。</textarea>
+        <div class="btn-row">
+            <button id="btn-generate" class="btn btn-primary">生成解题页</button>
+        </div>
+        <div id="status"></div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = '';
+    const $status = document.getElementById('status');
+    const $btn = document.getElementById('btn-generate');
+
+    function setStatus(msg, type) {
+        $status.textContent = msg;
+        $status.className = type;
+    }
+
+    document.getElementById('btn-generate').addEventListener('click', async () => {
+        const input = document.getElementById('problem-input').value.trim();
+        if (!input) { alert('请输入题目'); return; }
+
+        $btn.disabled = true;
+        $btn.innerHTML = '<span class="spinner"></span> 生成中...';
+        setStatus('正在解析并计算，请稍候...', 'loading');
+
+        try {
+            const res = await fetch(`${API_BASE}/api/solve`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ problem: input }),
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.error || '生成失败');
+
+            const url = URL.createObjectURL(new Blob([data.html], { type: 'text/html' }));
+            window.location.href = url;
+        } catch (err) {
+            setStatus('错误：' + err.message, 'error');
+            $btn.disabled = false;
+            $btn.innerHTML = '生成解题页';
+        }
+    });
+</script>
+</body>
+</html>
