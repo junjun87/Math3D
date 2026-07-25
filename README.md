@@ -1,6 +1,6 @@
-# Edulab MVP - 立体几何解题
+# Math3D — 立体几何交互解题
 
-最小可行产品：输入立体几何题面，后端用 sympy 精确计算，生成全屏可交互 Three.js 3D 解题网页，右上角一键下载 HTML。
+最小可行产品：📷 拍照/相册/文字输入立体几何题面 → 视觉 LLM OCR 识别 → sympy 精确计算 → 全屏可交互 Three.js 3D 解题网页，右上角一键下载 HTML。
 
 ## 当前支持题型
 
@@ -8,22 +8,25 @@
 - 正四棱锥：直线与平面所成角
 - 支持随机出题（随机题型 + 随机参数，自动筛除答案不规整的组合）
 - 支持 LLM 自然语言题面解析（可选，通过环境变量配置）
+- 支持拍照 OCR：视觉 LLM 识别图片中的题目文字
 
 ## 项目结构
 
 ```
 .
 ├── backend/
-│   ├── app.py               # FastAPI 服务（生产模式同源托管前端）
+│   ├── app.py               # FastAPI 服务（/api/solve + /api/ocr + 同源托管前端）
 │   ├── geometry_kernel.py   # sympy 精确计算核心 + 题型求解器
 │   ├── solver_registry.py   # @register_solver 题型注册表
-│   ├── llm_parser.py        # LLM 自然语言题面解析（可选）
+│   ├── llm_parser.py        # LLM 题面解析 + 视觉 OCR
 │   ├── bodies.py            # 几何体拓扑库（顶点 + 棱）
 │   ├── template.html        # Three.js 数据驱动模板
 │   └── scripts/
 │       └── generate.py      # CLI：直接生成解题 HTML 文件
 ├── frontend/
-│   └── index.html           # 题面录入 + 预览 + 下载
+│   └── index.html           # 多页面 UI（拍照/相册/文字/历史）
+├── docker-compose.yml       # Docker Compose 一键部署
+├── .env.example             # LLM 配置模板
 ├── Dockerfile               # Docker 镜像构建
 ├── requirements.txt
 └── README.md
@@ -58,39 +61,30 @@ python -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 
 **Docker 部署（推荐）：** 后端同源托管前端，访问 `http://localhost:8000` 即可。
 
-**本地开发：** 直接用浏览器打开 `frontend/index.html`（需将 `API_BASE` 改为 `http://localhost:8000`），或用静态服务器：
-
-```bash
-cd frontend
-python -m http.server 3000
-```
-
-然后访问 http://localhost:3000。
+**本地开发：** 启动后端后访问 `http://localhost:8000`（FastAPI 已同源托管前端静态文件），或直接打开 `frontend/index.html`（浏览器需允许 `file://` 跨域请求）。
 
 ## Docker 部署
 
 ```bash
-docker build -t edulab-mvp .
-docker run -d -p 8000:8000 --name edulab edulab-mvp
-```
+# 1. 配置 LLM（可选，用于拍照 OCR + 题面智能解析）
+cp .env.example .env
+# 编辑 .env 填入你的 API 密钥
 
-可选的 LLM 题面解析通过环境变量配置：
+# 2. 启动
+docker compose up -d
 
-```bash
-docker run -d -p 8000:8000 \
-  -e LLM_API_KEY=sk-xxx \
-  -e LLM_BASE_URL=https://api.openai.com/v1 \
-  -e LLM_MODEL=gpt-4o-mini \
-  --name edulab edulab-mvp
+# 3. 更新
+docker compose up -d --build
 ```
 
 ## 使用流程
 
-1. 输入或修改题目
-2. 点击「生成解题页」→ 自动跳转至全屏 3D 交互解题页
-3. 按「上一步/下一步」浏览解题过程，左侧公式与右侧 3D 高亮联动
-4. 点击右上角「下载 HTML」保存自包含课件
-5. 浏览器后退回到输入页
+1. 📷 **拍照搜题** / 🖼️ 从相册选择 / ⌨️ 文字输入 — 三种方式提交题目
+2. 视觉 AI 自动识别图片中的题目文字（拍照模式）
+3. 点击「生成解题页」→ 自动跳转至全屏 3D 交互解题页
+4. 按「上一步/下一步」浏览解题过程，左侧公式与右侧 3D 高亮联动
+5. 点击右上角「下载 HTML」保存自包含课件
+6. 浏览器后退回到输入页
 
 ## 扩展下一个题型
 
@@ -101,6 +95,6 @@ docker run -d -p 8000:8000 \
 
 ## 下一步建议
 
-- 添加拍照 / 手写输入入口
 - 扩展更多几何体（正四面体、三棱柱、球体）和题型（二面角、体积）
-- 接入多模态 LLM 直接从图片解析题面
+- 支持手写输入 / 草图画图识别
+- 增加历史记录云端同步

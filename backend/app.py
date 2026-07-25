@@ -1,5 +1,5 @@
 """
-Edulab MVP Web 后端
+Math3D Web 后端
 提供：
   - POST /api/solve   接收题面，返回渲染后的 HTML 字符串
   - GET  /api/health  健康检查
@@ -30,7 +30,7 @@ from pydantic import BaseModel
 from geometry_kernel import solve
 import llm_parser
 
-app = FastAPI(title="Edulab MVP - Solid Geometry")
+app = FastAPI(title="Math3D - Solid Geometry")
 
 # 允许前端跨域
 app.add_middleware(
@@ -93,13 +93,18 @@ async def ocr_image(image: UploadFile = File(...)):
     """拍照 OCR：上传图片，调用视觉 LLM 提取题目文本。"""
     try:
         contents = await image.read()
+        logger.info("OCR: received image type=%s size=%dKB filename=%s",
+                     image.content_type, len(contents) // 1024, image.filename)
         image_b64 = base64.b64encode(contents).decode("utf-8")
         media_type = image.content_type or "image/jpeg"
         text = llm_parser.ocr_image(image_b64, media_type)
+        logger.info("OCR: success, text length=%d", len(text))
         return {"success": True, "text": text}
     except llm_parser.LLMNotConfiguredError as e:
+        logger.warning("OCR: LLM not configured - %s", e)
         return JSONResponse({"success": False, "error": str(e)}, status_code=503)
     except Exception as e:
+        logger.exception("OCR: unexpected error")
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 
@@ -141,6 +146,7 @@ def solve_problem(req: SolveRequest):
             "answer_value": solution.answer_value,
         })
     except Exception as e:
+        logger.exception("solve_problem: unexpected error")
         return JSONResponse({"success": False, "error": str(e)}, status_code=500)
 
 

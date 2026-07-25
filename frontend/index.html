@@ -2,239 +2,538 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edulab — 立体几何交互解题</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Math3D — 立体几何交互解题</title>
     <style>
         :root {
-            --primary: #0ea5e9;
-            --primary-dark: #0284c7;
-            --accent: #d946ef;
-            --bg: #edf3f8;
-            --surface: #ffffff;
-            --text: #0f172a;
-            --muted: #475569;
-            --border: #e2e8f0;
-            --shadow-soft: 0 18px 45px rgba(15,23,42,0.08);
+            --p50: #eff6ff; --p100: #dbeafe; --p200: #bfdbfe; --p300: #93c5fd;
+            --p400: #60a5fa; --p500: #3b82f6; --p600: #2563eb; --p700: #1d4ed8;
+            --g50: #f9fafb; --g100: #f3f4f6; --g200: #e5e7eb; --g300: #d1d5db;
+            --g400: #9ca3af; --g500: #6b7280; --g700: #374151; --g900: #111827;
+            --red: #ef4444; --green: #22c55e;
         }
-        * { box-sizing: border-box; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body { height: 100%; -webkit-tap-highlight-color: transparent; }
         body {
-            margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-            font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-            background: var(--bg); color: var(--text);
+            font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(180deg, var(--p50), #fff);
+            color: var(--g900); min-height: 100vh;
         }
-        .container { width: 100%; max-width: 540px; padding: 20px; }
-        .header { text-align: center; margin-bottom: 32px; }
-        .header h1 {
-            font-size: 36px; font-weight: 800; margin: 0 0 8px;
-            background: linear-gradient(135deg, var(--primary-dark), var(--accent));
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+
+        /* ---- Pages ---- */
+        .page { display: none; min-height: 100vh; flex-direction: column; }
+        .page.active { display: flex; }
+
+        /* ---- Header ---- */
+        .nav-header {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 16px; background: #fff; border-bottom: 1px solid var(--g200);
+            position: sticky; top: 0; z-index: 10;
         }
-        .header p { color: var(--muted); font-size: 15px; margin: 0; }
-        .card {
-            background: var(--surface); border-radius: 20px; padding: 24px;
-            border: 1px solid rgba(226,232,240,0.95);
-            box-shadow: var(--shadow-soft);
+        .nav-header h1 { font-size: 17px; font-weight: 600; flex: 1; text-align: center; }
+        .nav-back { color: var(--g500); font-size: 16px; background: none; border: none; cursor: pointer; padding: 4px; }
+        .nav-spacer { width: 28px; }
+
+        /* ---- Home ---- */
+        .home-header { text-align: center; padding: 40px 16px 20px; }
+        .home-header h1 { font-size: 32px; font-weight: 800; color: var(--p700); }
+        .home-header p { color: var(--g500); font-size: 13px; margin-top: 6px; }
+        .home-cards { display: flex; flex-direction: column; gap: 14px; padding: 0 20px 24px; align-items: center; }
+        .entry-card {
+            width: 100%; max-width: 360px; display: flex; align-items: center; gap: 16px;
+            background: #fff; border-radius: 18px; padding: 18px 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06); border: 1px solid var(--g100);
+            cursor: pointer; transition: all 0.15s; user-select: none;
         }
-        .card label { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
-        .card textarea {
-            width: 100%; border: 1px solid var(--border); border-radius: 12px;
-            padding: 14px; font-size: 15px; font-family: inherit; line-height: 1.6;
-            resize: vertical; color: var(--text); background: #f8fafc;
-            transition: border-color 0.2s, box-shadow 0.2s;
+        .entry-card:active { transform: scale(0.98); background: var(--g50); }
+        .entry-card .icon { font-size: 32px; width: 48px; text-align: center; flex-shrink: 0; }
+        .entry-card .title { font-size: 17px; font-weight: 600; color: var(--g900); }
+        .entry-card .sub { font-size: 12px; color: var(--g400); margin-top: 2px; }
+        .entry-card.primary { background: var(--p500); color: #fff; border: none; box-shadow: 0 8px 24px rgba(59,130,246,0.3); }
+        .entry-card.primary .title { color: #fff; }
+        .entry-card.primary .sub { color: rgba(255,255,255,0.7); }
+        .home-footer { text-align: center; padding: 12px 0 32px; color: var(--g300); font-size: 11px; }
+
+        /* ---- Capture ---- */
+        .capture-preview { flex: 1; display: flex; align-items: center; justify-content: center; background: #000; }
+        .capture-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .capture-empty { text-align: center; color: var(--g500); }
+        .capture-empty .icon { font-size: 64px; margin-bottom: 12px; }
+        .capture-actions {
+            display: flex; gap: 12px; padding: 16px;
+            background: rgba(0,0,0,0.9);
         }
-        .card textarea:focus {
-            outline: none; border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(14,165,233,0.12);
-        }
-        .btn-row { display: flex; gap: 12px; margin-top: 16px; }
         .btn {
-            padding: 12px 20px; border-radius: 10px; font-weight: 700;
-            font-size: 15px; font-family: inherit; cursor: pointer; border: none;
-            transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
             display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 14px 20px; border-radius: 14px; font-size: 16px; font-weight: 600;
+            font-family: inherit; cursor: pointer; border: none; transition: all 0.15s;
         }
         .btn:active { transform: scale(0.97); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .btn-primary { flex: 1; background: var(--primary-dark); color: white; box-shadow: 0 4px 14px rgba(14,165,233,0.25); }
-        .btn-primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(14,165,233,0.35); }
-        .btn-camera {
-            background: #f1f5f9; color: var(--text);
-            border: 1px solid var(--border); white-space: nowrap;
-        }
-        .btn-camera:hover { background: #e2e8f0; }
-        .spinner {
-            border: 2.5px solid rgba(255,255,255,0.3); border-top: 2.5px solid white;
-            border-radius: 50%; width: 16px; height: 16px; animation: spin 0.7s linear infinite;
-            display: inline-block; vertical-align: middle;
-        }
-        .spinner-dark {
-            border-color: rgba(0,0,0,0.1); border-top-color: var(--primary-dark);
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        #status {
-            margin-top: 16px; padding: 12px 16px; border-radius: 12px;
-            font-size: 14px; text-align: center; display: none;
-        }
-        #status.error { display: block; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; }
-        #status.loading { display: block; background: #f0f9ff; color: #075985; border: 1px solid #bae6fd; }
-        #status.success { display: block; background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; }
+        .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+        .btn-primary { flex: 1; background: var(--p500); color: #fff; }
+        .btn-outline { background: rgba(255,255,255,0.15); color: #fff; flex-shrink: 0; }
+        .btn-full { width: 100%; background: var(--p500); color: #fff; }
+        .btn-white { background: #fff; color: var(--g900); border: 1px solid var(--g200); }
 
-        .photo-area {
-            margin-top: 12px; display: none;
+        /* ---- Text Input ---- */
+        .confirm-body { flex: 1; padding: 16px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
+        .confirm-body textarea {
+            width: 100%; flex: 1; min-height: 150px; border: 2px solid var(--g200); border-radius: 14px;
+            padding: 14px; font-size: 15px; font-family: inherit; line-height: 1.7; resize: none;
+            color: var(--g900); transition: border-color 0.2s;
         }
-        .photo-preview {
-            position: relative; display: inline-block; border-radius: 10px;
-            overflow: hidden; border: 1px solid var(--border);
+        .confirm-body textarea:focus { outline: none; border-color: var(--p400); }
+        .hint { background: var(--p50); border-radius: 12px; padding: 12px 16px; font-size: 13px; color: var(--p700); }
+        .status-msg { text-align: center; padding: 12px; font-size: 14px; border-radius: 12px; display: none; }
+        .status-msg.show { display: block; }
+        .status-msg.loading { background: var(--p50); color: var(--p700); }
+        .status-msg.error { background: #fef2f2; color: #991b1b; }
+        .status-msg.success { background: #f0fdf4; color: #166534; }
+
+        /* ---- History ---- */
+        .history-list { flex: 1; overflow-y: auto; padding: 12px 16px; }
+        .history-item {
+            display: flex; align-items: center; gap: 12px;
+            background: #fff; border-radius: 14px; border: 1px solid var(--g100);
+            padding: 14px; margin-bottom: 10px; cursor: pointer;
+            transition: all 0.12s;
         }
-        .photo-preview img { display: block; max-height: 180px; max-width: 100%; }
-        .photo-preview .ocr-overlay {
-            position: absolute; inset: 0; background: rgba(0,0,0,0.5);
+        .history-item:active { background: var(--g50); }
+        .history-thumb {
+            width: 48px; height: 48px; border-radius: 10px; background: var(--g100);
             display: flex; align-items: center; justify-content: center;
-            color: white; font-size: 14px; font-weight: 600;
+            font-size: 22px; flex-shrink: 0; overflow: hidden;
         }
-        .photo-actions { display: flex; gap: 8px; margin-top: 8px; }
-        .btn-sm {
-            padding: 8px 14px; font-size: 13px; border-radius: 8px; font-weight: 600;
-            font-family: inherit; cursor: pointer; border: none;
-            background: #f1f5f9; color: var(--text);
-            transition: background 0.15s;
+        .history-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .history-info { flex: 1; min-width: 0; }
+        .history-info .text { font-size: 14px; font-weight: 500; line-height: 1.4;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .history-info .answer { font-size: 12px; color: var(--p600); margin-top: 3px; }
+        .history-info .time { font-size: 11px; color: var(--g400); margin-top: 2px; }
+        .history-arrow { color: var(--g300); font-size: 18px; }
+        .history-delete {
+            width: 32px; height: 32px; border-radius: 50%; border: none;
+            background: transparent; color: var(--g300); font-size: 18px;
+            cursor: pointer; flex-shrink: 0; line-height: 1;
+            transition: all 0.12s;
         }
-        .btn-sm:hover { background: #e2e8f0; }
-        .btn-sm.danger { color: #dc2626; }
-        .btn-sm.danger:hover { background: #fef2f2; }
+        .history-delete:hover { background: #fef2f2; color: var(--red); }
+        .history-clear {
+            background: none; border: none; color: var(--g400); font-size: 13px;
+            cursor: pointer; padding: 4px 8px; flex-shrink: 0;
+        }
+        .history-clear:hover { color: var(--red); }
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--g400); }
+        .empty-state .icon { font-size: 56px; margin-bottom: 16px; }
+
+        .spinner { display: inline-block; border: 2.5px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; width: 18px; height: 18px; animation: spin 0.7s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-<div class="container">
-    <div class="header">
-        <h1>Edulab</h1>
-        <p>拍照或输入立体几何题，生成可交互 3D 解题页</p>
+
+<!-- ========== Home ========== -->
+<div class="page active safe-bottom" id="page-home">
+    <div class="home-header">
+        <h1>Math3D</h1>
+        <p>拍照搜题 · AI 解析 · 交互式 3D 课件</p>
     </div>
-    <div class="card">
-        <label>题目描述</label>
-        <textarea id="problem-input" rows="4" placeholder="例如：正方体 ABCD-A1B1C1D1 棱长为 2，求直线 AC1 与平面 BDD1B1 所成角的正弦值。">正方体 ABCD-A1B1C1D1 棱长为 2，求直线 AC1 与平面 BDD1B1 所成角的正弦值。</textarea>
-
-        <div class="photo-area" id="photo-area">
-            <div class="photo-preview" id="photo-preview">
-                <img id="photo-img" src="" alt="题目照片">
-            </div>
-            <div class="photo-actions">
-                <button class="btn-sm danger" id="btn-retake">删除重拍</button>
-            </div>
+    <div class="home-cards">
+        <div class="entry-card primary" data-nav="capture">
+            <span class="icon">📷</span>
+            <div><div class="title">拍照搜题</div><div class="sub">拍摄题目照片，AI 自动识别</div></div>
         </div>
-
-        <div class="btn-row">
-            <button id="btn-generate" class="btn btn-primary">生成解题页</button>
-            <button id="btn-camera" class="btn btn-camera">📷 拍照识别</button>
+        <div class="entry-card" data-nav="capture-album">
+            <span class="icon">🖼️</span>
+            <div><div class="title">从相册选择</div><div class="sub">上传已有的题目截图</div></div>
         </div>
-        <div id="status"></div>
+        <div class="entry-card" data-nav="text">
+            <span class="icon">⌨️</span>
+            <div><div class="title">文字输入</div><div class="sub">手动输入题目内容</div></div>
+        </div>
+        <div class="entry-card" data-nav="history">
+            <span class="icon">📋</span>
+            <div><div class="title">历史记录</div><div class="sub">查看已解答的题目</div></div>
+        </div>
+    </div>
+    <div class="home-footer">Math3D v0.2.0</div>
+</div>
+
+<!-- ========== Camera / Album Capture ========== -->
+<div class="page safe-bottom" id="page-capture">
+    <div class="nav-header">
+        <button class="nav-back" data-back>← 返回</button>
+        <h1 id="capture-title">拍照搜题</h1>
+        <div class="nav-spacer"></div>
+    </div>
+    <div class="capture-preview" id="capture-preview">
+        <div class="capture-empty" id="capture-empty">
+            <div class="icon">📷</div>
+            <p>点击下方按钮拍摄题目照片</p>
+        </div>
+        <img id="capture-img" src="" alt="" style="display:none">
+    </div>
+    <div id="capture-status" class="status-msg"></div>
+    <div class="capture-actions">
+        <button class="btn btn-primary" id="btn-capture-take">📷 拍照</button>
+        <button class="btn btn-outline" id="btn-capture-album">🖼️</button>
+    </div>
+    <input type="file" id="capture-file" accept="image/*" capture="environment" style="display:none">
+    <input type="file" id="album-file" accept="image/*" style="display:none">
+</div>
+
+<!-- ========== Text Input ========== -->
+<div class="page safe-bottom" id="page-text">
+    <div class="nav-header">
+        <button class="nav-back" data-back>← 返回</button>
+        <h1>文字输入题目</h1>
+        <div class="nav-spacer"></div>
+    </div>
+    <div id="text-status" class="status-msg"></div>
+    <div class="confirm-body">
+        <textarea id="text-input" placeholder="请输入题目内容，例如：&#10;在正方体 ABCD-A1B1C1D1 中，棱长为 2，求直线 AB1 与平面 A1C1D 的夹角。"></textarea>
+        <button class="btn btn-full" id="btn-text-submit">提交题目</button>
     </div>
 </div>
 
-<!-- Hidden file input -->
-<input type="file" id="file-input" accept="image/*" capture="environment" style="display:none">
+<!-- ========== History ========== -->
+<div class="page safe-bottom" id="page-history">
+    <div class="nav-header">
+        <button class="nav-back" data-back>← 返回</button>
+        <h1>历史记录</h1>
+        <button class="history-clear" id="btn-clear-history">清空</button>
+    </div>
+    <div class="history-list" id="history-list">
+        <div class="empty-state" id="history-empty">
+            <div class="icon">📭</div>
+            <p>暂无记录</p>
+        </div>
+    </div>
+</div>
 
 <script>
-    const API_BASE = '';
-    const $status = document.getElementById('status');
-    const $btn = document.getElementById('btn-generate');
-    const $textarea = document.getElementById('problem-input');
-    const $photoArea = document.getElementById('photo-area');
-    const $photoImg = document.getElementById('photo-img');
-    const $fileInput = document.getElementById('file-input');
+// ===== Page Router =====
+const pages = {};
+document.querySelectorAll('.page').forEach(p => pages[p.id.replace('page-','')] = p);
 
-    function setStatus(msg, type) {
-        $status.textContent = msg;
-        $status.className = type;
-    }
+function navigate(name) {
+    if (window.location.hash === '#' + name) return; // prevent hashchange recursion
+    Object.values(pages).forEach(p => p.classList.remove('active'));
+    const target = pages[name];
+    if (target) target.classList.add('active');
+    window.location.hash = name;
+    window.scrollTo(0, 0);
+}
 
-    // ---- 拍照 / 上传 ----
-    document.getElementById('btn-camera').addEventListener('click', () => {
-        $fileInput.click();
-    });
-
-    $fileInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        $photoImg.src = URL.createObjectURL(file);
-        $photoArea.style.display = 'block';
-        $status.className = '';
-
-        await runOCR(file);
-    });
-
-    document.getElementById('btn-retake').addEventListener('click', () => {
-        $photoImg.src = '';
-        $photoArea.style.display = 'none';
-        $fileInput.value = '';
-        $status.className = '';
-    });
-
-    // ---- OCR：上传图片到后端，由视觉 LLM 识别 ----
-    async function runOCR(file) {
-        setStatus('正在上传图片并调用视觉模型识别...', 'loading');
-
-        try {
-            const formData = new FormData();
-            formData.append('image', file);
-
-            const res = await fetch(`${API_BASE}/api/ocr`, {
-                method: 'POST',
-                body: formData,
-            });
-            const data = await res.json();
-
-            if (!data.success) {
-                // 503 = LLM 未配置
-                if (res.status === 503) {
-                    setStatus('视觉 LLM 未配置。请设置 LLM_API_KEY 环境变量，或手动输入题目。', 'error');
-                } else {
-                    setStatus('OCR 失败：' + (data.error || '未知错误'), 'error');
-                }
-                return;
-            }
-
-            const text = (data.text || '').trim();
-            if (text) {
-                $textarea.value = text;
-                $textarea.focus();
-                setStatus('识别完成，请核对后点击「生成解题页」', 'success');
-            } else {
-                setStatus('未识别到题目文字，请手动输入或重新拍照', 'error');
-            }
-        } catch (err) {
-            console.error('OCR error:', err);
-            setStatus('网络错误，请检查后端是否运行。或手动输入题目。', 'error');
+// Back buttons
+document.querySelectorAll('[data-back]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const activePage = document.querySelector('.page.active');
+        // Reset state based on which page we're leaving
+        if (activePage && activePage.id === 'page-capture') {
+            resetCapture('camera');
         }
+        if (activePage && activePage.id === 'page-text') {
+            document.getElementById('text-input').value = '';
+            $textStatus.className = 'status-msg';
+        }
+        navigate('home');
+    });
+});
+
+// Home cards
+document.querySelectorAll('[data-nav]').forEach(card => {
+    card.addEventListener('click', () => {
+        const nav = card.dataset.nav;
+        if (nav === 'capture') { resetCapture('camera'); navigate('capture'); }
+        else if (nav === 'capture-album') { resetCapture('album'); navigate('capture'); }
+        else if (nav === 'text') {
+            // Clear stale OCR text when entering text page directly
+            document.getElementById('text-input').value = '';
+            $textStatus.className = 'status-msg';
+            navigate('text');
+        }
+        else navigate(nav);
+    });
+});
+
+// ===== Capture =====
+const $captureEmpty = document.getElementById('capture-empty');
+const $captureImg = document.getElementById('capture-img');
+const $captureStatus = document.getElementById('capture-status');
+const $captureTitle = document.getElementById('capture-title');
+const $captureFile = document.getElementById('capture-file');
+const $albumFile = document.getElementById('album-file');
+
+function resetCapture(mode) {
+    $captureTitle.textContent = mode === 'album' ? '从相册选择' : '拍照搜题';
+    $captureImg.style.display = 'none';
+    $captureEmpty.style.display = '';
+    $captureStatus.className = 'status-msg';
+    $captureFile.value = '';
+    $albumFile.value = '';
+}
+
+let _captureObjUrl = null;
+function showCapturePreview(file) {
+    if (_captureObjUrl) URL.revokeObjectURL(_captureObjUrl);
+    _captureObjUrl = URL.createObjectURL(file);
+    $captureImg.src = _captureObjUrl;
+    $captureImg.style.display = '';
+    $captureEmpty.style.display = 'none';
+}
+
+function captureStatus(msg, type) {
+    $captureStatus.textContent = msg;
+    $captureStatus.className = 'status-msg ' + type + ' show';
+}
+
+document.getElementById('btn-capture-take').addEventListener('click', () => $captureFile.click());
+document.getElementById('btn-capture-album').addEventListener('click', () => $albumFile.click());
+
+// Compress image before upload: resize to max 1920px, convert to JPEG
+// Fixes: (1) HEIC→JPEG for iPhone photos, (2) reduces file size from MB→~200KB
+function compressImage(file) {
+    return new Promise((resolve, reject) => {
+        // If already a small JPEG, skip compression
+        if (file.type === 'image/jpeg' && file.size < 300 * 1024) {
+            resolve(file);
+            return;
+        }
+        const img = new Image();
+        const objUrl = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(objUrl);
+            const maxDim = 1920;
+            let w = img.width, h = img.height;
+            if (w > maxDim || h > maxDim) {
+                const scale = maxDim / Math.max(w, h);
+                w = Math.round(w * scale);
+                h = Math.round(h * scale);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            canvas.toBlob(blob => {
+                if (blob) resolve(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
+                else reject(new Error('compress failed'));
+            }, 'image/jpeg', 0.85);
+        };
+        img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('image load failed')); };
+        img.src = objUrl;
+    });
+}
+
+async function handleCaptureFile(file) {
+    if (!file) return;
+    showCapturePreview(file);
+    captureStatus('正在压缩图片...', 'loading');
+
+    try {
+        // Compress before upload (convert HEIC → JPEG, resize large photos)
+        const compressed = await compressImage(file);
+        captureStatus('正在调用视觉 AI 识别...', 'loading');
+
+        const fd = new FormData(); fd.append('image', compressed, compressed.name);
+        const res = await fetch('/api/ocr', { method: 'POST', body: fd });
+        if (!res.ok) {
+            const errText = await res.text().catch(() => '');
+            throw new Error('OCR 请求失败 (' + res.status + ')' + (errText ? ': ' + errText.slice(0, 100) : ''));
+        }
+        const data = await res.json();
+
+        if (!data.success) {
+            captureStatus('识别失败：' + (data.error || '请确认 LLM 已配置'), 'error');
+            return;
+        }
+        const text = (data.text || '').trim();
+        if (!text) { captureStatus('未识别到文字，请重新拍照', 'error'); return; }
+
+        captureStatus('识别完成', 'success');
+        // Navigate to text page for user review & confirmation
+        document.getElementById('text-input').value = text;
+        $textStatus.textContent = '✅ 识别完成，请核对题目后提交';
+        $textStatus.className = 'status-msg success show';
+        setTimeout(() => navigate('text'), 500);
+    } catch (e) {
+        captureStatus('错误：' + (e.message || '请重试'), 'error');
     }
+}
 
-    // ---- 生成解题页 ----
-    document.getElementById('btn-generate').addEventListener('click', async () => {
-        const input = $textarea.value.trim();
-        if (!input) { alert('请输入题目'); return; }
+$captureFile.addEventListener('change', e => handleCaptureFile(e.target.files[0]));
+$albumFile.addEventListener('change', e => handleCaptureFile(e.target.files[0]));
 
-        $btn.disabled = true;
-        $btn.innerHTML = '<span class="spinner"></span> 生成中...';
-        setStatus('正在解析并计算，请稍候...', 'loading');
+// ===== Text Input =====
+const $textStatus = document.getElementById('text-status');
 
-        try {
-            const res = await fetch(`${API_BASE}/api/solve`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ problem: input }),
-            });
-            const data = await res.json();
-            if (!data.success) throw new Error(data.error || '生成失败');
+document.getElementById('btn-text-submit').addEventListener('click', async () => {
+    const text = document.getElementById('text-input').value.trim();
+    if (!text) return;
+    $textStatus.textContent = '正在提交...'; $textStatus.className = 'status-msg loading show';
+    await submitAndGo(text, $textStatus);
+});
 
-            const url = URL.createObjectURL(new Blob([data.html], { type: 'text/html' }));
-            window.location.href = url;
-        } catch (err) {
-            setStatus('错误：' + err.message, 'error');
-            $btn.disabled = false;
-            $btn.innerHTML = '生成解题页';
+// ===== Shared: submit & redirect =====
+async function submitAndGo(text, $statusEl) {
+    if (!text) return;
+    $statusEl.textContent = '正在解析计算...'; $statusEl.className = 'status-msg loading show';
+
+    try {
+        const res = await fetch('/api/solve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ problem: text }),
+        });
+        if (!res.ok) {
+            const errText = await res.text().catch(() => '');
+            throw new Error('求解请求失败 (' + res.status + ')' + (errText ? ': ' + errText.slice(0, 100) : ''));
+        }
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error || '求解失败');
+
+        // Save to history
+        saveHistory(text, data.answer_latex, data.answer_value);
+
+        const url = URL.createObjectURL(new Blob([data.html], { type: 'text/html' }));
+        const win = window.open(url, '_blank');
+        // Revoke blob URL after the new tab has loaded
+        if (win) { setTimeout(() => URL.revokeObjectURL(url), 10000); }
+        else { $statusEl.textContent = '请允许弹出窗口以查看解题页'; $statusEl.className = 'status-msg error show'; }
+    } catch (e) {
+        $statusEl.textContent = '错误：' + e.message; $statusEl.className = 'status-msg error show';
+    }
+}
+
+// ===== History =====
+const HISTORY_KEY = 'math3d_history';
+
+function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+    catch { return []; }
+}
+
+function saveHistory(problem, answer_latex, answer_value) {
+    const items = loadHistory();
+    items.unshift({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
+        problem: problem.slice(0, 80),
+        answer_latex,
+        answer_value,
+        time: Date.now(),
+    });
+    // Keep max 50
+    if (items.length > 50) items.length = 50;
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
+}
+
+function formatTime(ts) {
+    const d = new Date(ts);
+    return d.getFullYear() + '-' +
+        String(d.getMonth()+1).padStart(2,'0') + '-' +
+        String(d.getDate()).padStart(2,'0') + ' ' +
+        String(d.getHours()).padStart(2,'0') + ':' +
+        String(d.getMinutes()).padStart(2,'0');
+}
+
+function renderHistory() {
+    const items = loadHistory();
+    const list = document.getElementById('history-list');
+    const empty = document.getElementById('history-empty');
+
+    if (items.length === 0) {
+        empty.style.display = '';
+        list.querySelectorAll('.history-item').forEach(el => el.remove());
+        return;
+    }
+    empty.style.display = 'none';
+
+    // Remove old items not in current list
+    list.querySelectorAll('.history-item').forEach(el => {
+        if (!items.find(i => i.id === el.dataset.id)) el.remove();
+    });
+
+    items.forEach(item => {
+        if (list.querySelector(`[data-id="${item.id}"]`)) return; // already rendered
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.dataset.id = item.id;
+        div.innerHTML = `
+            <div class="history-thumb">📐</div>
+            <div class="history-info">
+                <div class="text">${escapeHtml(item.problem)}</div>
+                <div class="answer">答案：${escapeHtml(item.answer_latex || '')}</div>
+                <div class="time">${formatTime(item.time)}</div>
+            </div>
+            <button class="history-delete" data-id="${item.id}">×</button>
+        `;
+        div.addEventListener('click', (e) => {
+            // Don't navigate if clicking delete button
+            if (e.target.closest('.history-delete')) return;
+            document.getElementById('text-input').value = item.problem;
+            navigate('text');
+        });
+        list.insertBefore(div, list.firstChild);
+    });
+}
+
+function escapeHtml(s) {
+    const div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML;
+}
+
+function deleteHistoryItem(id) {
+    const items = loadHistory().filter(i => i.id !== id);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
+    renderHistory();
+}
+
+function clearHistory() {
+    if (confirm('确定要清除所有历史记录吗？')) {
+        localStorage.removeItem(HISTORY_KEY);
+        renderHistory();
+    }
+}
+
+// Delegate click for dynamic history items (delete buttons)
+document.getElementById('history-list').addEventListener('click', (e) => {
+    const btn = e.target.closest('.history-delete');
+    if (btn) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        deleteHistoryItem(btn.dataset.id);
+    }
+});
+
+// Clear-history button
+document.getElementById('btn-clear-history').addEventListener('click', clearHistory);
+
+// ===== Init =====
+function init() {
+    const hash = window.location.hash.replace('#','');
+    if (hash && pages[hash]) navigate(hash);
+
+    // Browser back/forward support
+    window.addEventListener('hashchange', () => {
+        const name = window.location.hash.replace('#', '');
+        if (name && pages[name]) {
+            // Update page visibility without re-setting hash
+            Object.values(pages).forEach(p => p.classList.remove('active'));
+            if (pages[name]) pages[name].classList.add('active');
+            window.scrollTo(0, 0);
         }
     });
+
+    // Render history when shown
+    const historyObserver = new MutationObserver(() => {
+        if (pages.history.classList.contains('active')) renderHistory();
+    });
+    historyObserver.observe(pages.history, { attributes: true, attributeFilter: ['class'] });
+}
+
+init();
 </script>
 </body>
 </html>

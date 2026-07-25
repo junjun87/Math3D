@@ -699,6 +699,7 @@ def generate_random(seed: int = None, max_retries: int = 30) -> Solution:
         max_retries: 最大重试次数
     """
     rng = _random.Random(seed)
+    solver = _RANDOM_TEMPLATES[0]  # fallback if max_retries=0
     for _ in range(max_retries):
         solver = rng.choice(_RANDOM_TEMPLATES)
         # 随机参数
@@ -734,7 +735,7 @@ def _sanitize_params(params: dict) -> dict:
     cleaned = {}
     for k, v in params.items():
         try:
-            cleaned[k] = float(v)
+            cleaned[k] = sp.Rational(v)
         except (TypeError, ValueError):
             logger.warning("Non-numeric parameter %s=%s, using default 2", k, v)
             cleaned[k] = 2
@@ -743,6 +744,7 @@ def _sanitize_params(params: dict) -> dict:
 
 def _keyword_fallback(problem_text: str) -> Solution:
     """原始关键词匹配逻辑，LLM 不可用时的降级方案。"""
+    problem_text = llm_parser._normalize_ocr_text(problem_text)
     lowered = problem_text.lower()
     if "异面" in problem_text or "skew" in lowered:
         return solve_cube_line_line_angle()
