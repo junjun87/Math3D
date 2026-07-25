@@ -46,12 +46,12 @@ class LLMConfig:
     base_url: str = "https://api.openai.com/v1"
     api_key: str = ""
     model: str = "gpt-4o-mini"
-    timeout: int = 30
+    timeout: int = 60
 
     @classmethod
     def from_env(cls) -> "LLMConfig":
         try:
-            timeout = int(os.getenv("LLM_TIMEOUT", "30"))
+            timeout = int(os.getenv("LLM_TIMEOUT", "60"))
         except (TypeError, ValueError):
             logger.warning("LLM_TIMEOUT is not a valid integer, using default 30")
             timeout = 30
@@ -80,6 +80,9 @@ def _build_system_prompt() -> str:
     }
     query_descriptions = {
         "line_plane_angle": "线面角（直线与平面所成角的正弦值）",
+        "line_line_angle": "异面直线夹角（余弦值）",
+        "point_plane_distance": "点到平面距离",
+        "point_range": "动点取值范围（动点在侧面上满足某条件时，线段长度的取值范围）",
     }
 
     # 生成支持的题型列表
@@ -136,7 +139,16 @@ def _build_system_prompt() -> str:
 输出：{{"shape_type": "cube", "query_type": "line_plane_angle", "parameters": {{"edge": 2}}}}
 
 用户：一个边长为3的正方体，求体对角线AC1与对角面BDD1B1的夹角正弦
-输出：{{"shape_type": "cube", "query_type": "line_plane_angle", "parameters": {{"edge": 3}}}}"""
+输出：{{"shape_type": "cube", "query_type": "line_plane_angle", "parameters": {{"edge": 3}}}}
+
+用户：正方体ABCD-A1B1C1D1棱长为2，E,F分别是棱BC,CC1的中点，P是侧面BCC1B1内一点，若A1P∥平面AEF，求线段A1P长度的取值范围。
+输出：{{"shape_type": "cube", "query_type": "point_range", "parameters": {{"edge": 2}}}}
+
+用户：正方体棱长为2，求点A1到平面AB1C的距离。
+输出：{{"shape_type": "cube", "query_type": "point_plane_distance", "parameters": {{"edge": 2}}}}
+
+用户：正方体棱长为2，求异面直线A1C与AB所成角的余弦值。
+输出：{{"shape_type": "cube", "query_type": "line_line_angle", "parameters": {{"edge": 2}}}}"""
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +175,7 @@ def _extract_content(data: dict) -> str:
 
 
 def _call_llm(system_prompt: str, user_message: str, config: LLMConfig,
-              use_json: bool = True, max_tokens: int = 512) -> str:
+              use_json: bool = True, max_tokens: int = 4096) -> str:
     """调用 OpenAI 兼容的 /v1/chat/completions，返回响应文本。"""
     url = config.base_url.rstrip("/") + "/v1/chat/completions"
 
@@ -175,6 +187,7 @@ def _call_llm(system_prompt: str, user_message: str, config: LLMConfig,
         ],
         "temperature": 0.1,
         "max_tokens": max_tokens,
+        "thinking": {"type": "disabled"},  # v4-flash/pro 关闭思考模式，2-3s 响应
     }
     if use_json:
         payload["response_format"] = {"type": "json_object"}
@@ -509,7 +522,7 @@ def parse_problem(problem_text: str) -> dict:
         raise LLMNotConfiguredError("LLM_API_KEY 未设置，跳过 LLM 解析")
 
     system_prompt = _build_system_prompt()
-    raw = _call_llm(system_prompt, problem_text, config)
+    raw = _call_llm(system_prompt, problem_text, config, use_json=True, max_tokens=4096)
     return _parse_response(raw)
 
 

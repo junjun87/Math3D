@@ -6,12 +6,13 @@ generate.py — 把结构化课程数据注入 template/lesson.html，产出单�
 坐标、向量、最终答案均为 sympy 精确计算结果，3D 坐标与解题数值同源。
 
 用法:
-    python scripts/generate.py cube           ./cube.html    # 正方体·线面角
-    python scripts/generate.py skew           ./skew.html    # 异面直线夹角
-    python scripts/generate.py distance       ./dist.html    # 点面距离
-    python scripts/generate.py pyramid        ./pyramid.html # 正四棱锥·线面角
-    python scripts/generate.py random 7       ./random.html  # 随机出题
-    python scripts/generate.py list                          # 列出已注册题型
+    python scripts/generate.py cube           ./cube.html       # 正方体·线面角
+    python scripts/generate.py skew           ./skew.html       # 异面直线夹角
+    python scripts/generate.py distance       ./dist.html       # 点面距离
+    python scripts/generate.py pyramid        ./pyramid.html    # 正四棱锥·线面角
+    python scripts/generate.py point_range    ./point_range.html # 正方体·动点取值范围
+    python scripts/generate.py random 7       ./random.html     # 随机出题
+    python scripts/generate.py list                             # 列出已注册题型
 """
 
 from __future__ import annotations
@@ -101,6 +102,7 @@ def main():
         "skew": gk.solve_cube_line_line_angle,
         "distance": gk.solve_cube_point_plane_distance,
         "pyramid": gk.solve_pyramid_line_plane_angle,
+        "point_range": gk.solve_cube_point_range,
     }
 
     if cmd == "random":

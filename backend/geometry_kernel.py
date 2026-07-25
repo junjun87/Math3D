@@ -679,6 +679,167 @@ def solve_pyramid_line_plane_angle(base_edge=2, height=1) -> Solution:
     )
 
 
+# --- 正方体 · 动点取值范围 (A₁P∥平面AEF，P在侧面上) ---
+
+@register_solver("cube", "point_range")
+def solve_cube_point_range(edge=2) -> Solution:
+    """正方体 ABCD-A₁B₁C₁D₁，E=BC中点, F=CC₁中点, P在侧面BCC₁B₁上,
+    A₁P∥平面AEF，求|A₁P|取值范围。"""
+    import bodies as _bodies
+    a = sp.Rational(edge)
+    pts = build_cube(edge)
+
+    # E = BC中点, F = CC₁中点
+    E_vec = midpoint(pts["B"], pts["C"])
+    F_vec = midpoint(pts["C"], pts["C1"])
+    pts["E"] = E_vec
+    pts["F"] = F_vec
+    A1 = pts["A1"]
+
+    # 平面 AEF 过 A，法向量 n = AE × AF
+    AE = E_vec - pts["A"]
+    AF = F_vec - pts["A"]
+    n = AE.cross(AF)
+
+    # A₁P ∥ 平面 AEF → P 满足 n·P = n·A₁
+    # P 在侧面 BCC₁B₁ 上: x = a, y∈(0,a), z∈(0,a)
+    # 代入得 z - y = a/2 → z = y + a/2
+    rhs = n.dot(A1)
+
+    # 用 sympy 验证：P=(a, y, z), n·P = rhs → z = y + a/2
+    y_sym = sp.symbols('y', real=True)
+    # n[0]*a + n[1]*y + n[2]*(y + a/2) == rhs 应该恒成立
+
+    # y 的范围：0 < y < a 且 0 < z = y + a/2 < a → 0 < y < a/2
+    y_low = sp.Integer(0)
+    y_high = a / 2
+
+    # |A₁P|² = (a-0)² + (y-0)² + (z-a)²
+    # z = y + a/2, 所以 z - a = y - a/2
+    # = a² + y² + (y - a/2)² = 2y² - a·y + 5a²/4
+    dist_sq = a**2 + y_sym**2 + (y_sym + a/2 - a)**2
+    dist_sq = sp.simplify(dist_sq)  # 2*y**2 - a*y + 5*a**2/4
+
+    # 二次函数最小值在 y = a/4
+    d_dist = sp.diff(dist_sq, y_sym)
+    y_crit = sp.solve(d_dist, y_sym)[0]  # a/4
+    min_dist_sq = sp.simplify(dist_sq.subs(y_sym, y_crit))
+    min_dist = sp.sqrt(min_dist_sq)  # 3a√2/4
+
+    # 端点值（开区间，取 sup）
+    max_dist_sq = sp.simplify(dist_sq.subs(y_sym, 0))  # 5a²/4
+    max_dist = sp.sqrt(max_dist_sq)  # a√5/2
+
+    ans_latex = rf"\left[{tex(min_dist)},\ {tex(max_dist)}\right)"
+    ans_val = float(min_dist)  # 以最小值作为数值答案
+
+    problem_text = (
+        f"正方体 $ABCD-A_1B_1C_1D_1$ 棱长为 {edge}，"
+        f"$E,F$ 分别是棱 $BC,CC_1$ 的中点，"
+        f"$P$ 是侧面 $BCC_1B_1$ 内（不含边界）一点。"
+        rf"若 $A_1P \parallel$ 平面 $AEF$，则线段 $A_1P$ 长度的取值范围是_____。"
+    )
+
+    topo = _bodies.cuboid()
+    tp = to_three(pts, scale=2)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    # P 轨迹线段端点（在面 BCC₁B₁ 上）
+    P_low = V(a, y_low, y_low + a/2)    # (a, 0, a/2) — 边界，不含
+    P_high = V(a, y_high, y_high + a/2)  # (a, a/2, a) — 边界，不含
+    pts["P_low"] = P_low
+    pts["P_high"] = P_high
+    # P 的中点（实际可取到的点，用于展示）
+    pts["P_mid"] = V(a, a/4, 3*a/4)
+
+    answer_label = f"线段 A₁P 长度的取值范围"
+
+    # 重新生成 three_points（新增了 E, F, P 系列点）
+    tp2 = to_three(pts, scale=2)
+    names2 = list(tp2)
+    center2 = [sum(tp2[k][i] for k in names2) / len(names2) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, answer_label,
+        scale=2,
+        spheres=topo["spheres"] + ["E", "F", "A1", "P_mid"],
+        edges=topo["edges"],
+        elements={
+            "Point_E": {"type": "sphere", "pt": "E", "color": "emphasis", "radius": 0.15},
+            "Point_F": {"type": "sphere", "pt": "F", "color": "emphasis", "radius": 0.15},
+            "Point_A1": {"type": "sphere", "pt": "A1", "color": "emphasis", "radius": 0.18},
+            "Point_P_mid": {"type": "sphere", "pt": "P_mid", "color": "highlight", "radius": 0.16},
+            "Plane_AEF": {"type": "plane", "pts": ["A", "E", "F"]},
+            "Line_P_track": {"type": "line", "a": "P_low", "b": "P_high", "color": "emphasis", "depthTest": False},
+            "Line_A1P": {"type": "line", "a": "A1", "b": "P_mid", "color": "highlight", "dashed": True, "depthTest": False},
+            "Axis": {"type": "axes", "size": 3},
+        },
+        target=center2, initial_camera=[6, 5, 4],
+        lesson_meta="交互解题 · 动点取值范围", problem=problem_text,
+    )
+
+    mp = {k: tex_vec(v) for k, v in pts.items()}
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以 $A$ 为原点建系，正方体棱长为 ${tex(a)}$。</p>"
+                f"<p>$A{mp['A']}, B{mp['B']}, C{mp['C']}, A_1{mp['A1']}, B_1{mp['B1']}, C_1{mp['C1']}$</p>"
+                f"<p>$E$ 为 $BC$ 中点：$E{mp['E']}$</p>"
+                f"<p>$F$ 为 $CC_1$ 中点：$F{mp['F']}$</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 6, "y": 5, "z": 4},
+        },
+        {
+            "title": "求平面 AEF 的法向量",
+            "content": (
+                f"<p>$\\overrightarrow{{AE}} = {tex_vec(AE)}, \\quad \\overrightarrow{{AF}} = {tex_vec(AF)}$</p>"
+                f"<p>法向量 $\\vec n = \\overrightarrow{{AE}} \\times \\overrightarrow{{AF}} = {tex_vec(n)}$</p>"
+                f"<p>平面 $AEF$ 过原点，方程为 ${tex(n[0])}x {'+' if n[1]>=0 else ''}{tex(n[1])}y {'+' if n[2]>=0 else ''}{tex(n[2])}z = 0$</p>"
+            ),
+            "highlight": ["Plane_AEF", "Point_E", "Point_F"],
+            "cameraPos": {"x": 5, "y": 6, "z": 5},
+        },
+        {
+            "title": "由平行条件求 P 的轨迹",
+            "content": (
+                rf"<p>$A_1P \parallel$ 平面 $AEF$，即 $P$ 在过 $A_1$ 且平行于平面 $AEF$ 的平面上：</p>"
+                f"<p>$\\vec n \\cdot (P - A_1) = 0$，即 $\\vec n \\cdot P = \\vec n \\cdot A_1 = {tex(rhs)}$</p>"
+                f"<p>$P$ 在侧面 $BCC_1B_1$ 上，设 $P(a, y, z)$，代入得：</p>"
+                f"<p>$z - y = \\frac{{a}}{{2}}$，即 $z = y + \\frac{{a}}{{2}}$</p>"
+                f"<p>又 $0 < y < a,\\ 0 < z < a$，得 $0 < y < \\frac{{a}}{{2}}$</p>"
+            ),
+            "highlight": ["Line_P_track", "Point_A1", "Plane_AEF"],
+            "cameraPos": {"x": 0, "y": 8, "z": 2},
+        },
+        {
+            "title": "求 |A₁P| 的取值范围",
+            "content": (
+                f"<p>$|A_1P|^2 = (a-0)^2 + (y-0)^2 + (z-a)^2$</p>"
+                f"<p>$= a^2 + y^2 + (y - \\frac{{a}}{{2}})^2$</p>"
+                f"<p>$= 2y^2 - ay + \\frac{{5a^2}}{{4}}$</p>"
+                f"<p>$= 2(y - \\frac{{a}}{{4}})^2 + \\frac{{9a^2}}{{8}}$</p>"
+                f"<p>当 $y = \\frac{{a}}{{4}}$ 时，$|A_1P|_{{min}} = {tex(min_dist)} = {tex(min_dist.evalf(4))}$</p>"
+                f"<p>当 $y \\to 0$ 或 $y \\to \\frac{{a}}{{2}}$ 时（不含边界），$|A_1P| \\to {tex(max_dist)} = {tex(max_dist.evalf(4))}$</p>"
+                f"<p>$\\therefore |A_1P| \\in {ans_latex}$</p>"
+            ),
+            "highlight": ["Line_P_track", "Line_A1P", "Point_A1", "Point_P_mid"],
+            "cameraPos": {"x": 6, "y": 5, "z": 4},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=answer_label,
+        three_points=tp2, spheres=topo["spheres"] + ["E", "F", "A1", "P_mid"],
+        edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center2, initial_camera=[6, 5, 4], scale=2,
+    )
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 随机出题
 # ══════════════════════════════════════════════════════════════════════════════
@@ -688,6 +849,7 @@ _RANDOM_TEMPLATES: List[Callable[..., Solution]] = [
     solve_cube_line_line_angle,
     solve_cube_point_plane_distance,
     solve_pyramid_line_plane_angle,
+    solve_cube_point_range,
 ]
 
 
@@ -743,21 +905,47 @@ def _sanitize_params(params: dict) -> dict:
 
 
 def _keyword_fallback(problem_text: str) -> Solution:
-    """原始关键词匹配逻辑，LLM 不可用时的降级方案。"""
+    """原始关键词匹配逻辑，LLM 不可用时的降级方案。
+
+    只对明确可匹配的题型做关键词匹配；
+    无法判断时抛出 ValueError（让调用方返回错误而非瞎猜）。
+    """
     problem_text = llm_parser._normalize_ocr_text(problem_text)
     lowered = problem_text.lower()
+
+    # 异面直线夹角
     if "异面" in problem_text or "skew" in lowered:
         return solve_cube_line_line_angle()
-    if "距离" in problem_text or "distance" in lowered:
+
+    # 点到平面距离
+    if ("距离" in problem_text or "distance" in lowered) and "平面" in problem_text:
         return solve_cube_point_plane_distance()
+
+    # 线面角（直线与平面所成角）
+    if "线面角" in problem_text or ("所成角" in problem_text and "平面" in problem_text):
+        return solve_line_plane_angle_cube(edge=2)
+
+    # 正四棱锥
     if "四棱锥" in problem_text or "pyramid" in lowered:
         return solve_pyramid_line_plane_angle()
+
+    # 动点取值范围（动点在侧面上满足条件，求线段长度范围）
+    if "取值范围" in problem_text or "范围" in problem_text:
+        if "正方体" in problem_text or "cube" in lowered:
+            return solve_cube_point_range()
+
+    # 随机出题
     if "随机" in problem_text or "random" in lowered:
         return generate_random()
-    # 默认：正方体线面角
-    if "正方体" in problem_text or "cube" in lowered:
-        return solve_line_plane_angle_cube(edge=2)
-    return solve_line_plane_angle_cube(edge=2)
+
+    # 无法确定题型 → 抛出错误
+    supported = ", ".join(
+        f"{s}+{q}" for s, qs in list_supported_types().items() for q in qs
+    )
+    raise ValueError(
+        f"无法自动判断题型，请手动选择题目类型。"
+        f"当前支持：{supported}"
+    )
 
 
 def solve(problem_text: str) -> Solution:
@@ -767,6 +955,7 @@ def solve(problem_text: str) -> Solution:
     降级到关键词匹配。
     """
     # Phase 1: LLM 解析
+    parse_error_msg = None
     try:
         spec = llm_parser.parse_problem(problem_text)
         solver = get_solver(spec["shape_type"], spec["query_type"])
@@ -774,10 +963,11 @@ def solve(problem_text: str) -> Solution:
             supported = ", ".join(
                 f"{s}+{q}" for s, qs in list_supported_types().items() for q in qs
             )
-            raise ValueError(
-                f"不支持的问题类型：shape={spec['shape_type']}, query={spec['query_type']}。"
+            msg = (
+                f"不支持的问题类型：{spec['shape_type']} + {spec['query_type']}。"
                 f"当前支持：{supported}"
             )
+            raise ValueError(msg)
         params = _sanitize_params(spec.get("parameters", {}))
         logger.info("LLM parsed: shape=%s query=%s params=%s",
                      spec["shape_type"], spec["query_type"], params)
@@ -785,13 +975,23 @@ def solve(problem_text: str) -> Solution:
     except llm_parser.LLMNotConfiguredError:
         logger.info("LLM not configured; falling back to keyword matching")
     except llm_parser.LLMParseError as e:
+        # LLM 明确返回不支持 → 保留错误信息，降级时也不瞎猜
+        error_str = str(e)
+        if "不支持" in error_str:
+            parse_error_msg = error_str
         logger.warning("LLM parse failed: %s; falling back to keyword matching", e)
     except Exception as e:
         logger.warning("LLM call failed (%s: %s); falling back to keyword matching",
                        type(e).__name__, e)
 
     # Phase 2: 降级 — 关键词匹配
-    return _keyword_fallback(problem_text)
+    try:
+        return _keyword_fallback(problem_text)
+    except Exception as e:
+        # 如果 LLM 已经给出了明确的错误信息，优先用它
+        if parse_error_msg:
+            raise ValueError(parse_error_msg) from e
+        raise
 
 
 # ══════════════════════════════════════════════════════════════════════════════

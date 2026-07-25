@@ -638,17 +638,46 @@
             updateSceneState();
         }
 
+        // ---- Auto-fit camera to model ----
+        function fitCameraToModel() {
+            const allPoints = Object.values(POINTS);
+            if (allPoints.length === 0) return;
+            const box = new THREE.Box3();
+            allPoints.forEach(p => box.expandByPoint(p));
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+            const maxDim = Math.max(size.x, size.y, size.z);
+
+            // Use model.target as look-at center, fallback to bounding box center
+            const target = model.target ? v3(model.target) : center;
+            controls.target.copy(target);
+
+            // Direction from initialCamera hint, or default isometric view
+            const ic = model.initialCamera || [5, 4, 6];
+            const dir = new THREE.Vector3(ic[0], ic[1], ic[2]).sub(target);
+            if (dir.length() < 0.01) dir.set(3, 2, 4);
+            dir.normalize();
+
+            // Fit model height in viewport: visible height at distance d = 2*d*tan(fov/2)
+            const fovRad = camera.fov * Math.PI / 180;
+            const distance = Math.max((maxDim * 1.4) / (2 * Math.tan(fovRad / 2)), 5);
+
+            camera.position.copy(target.clone().add(dir.multiplyScalar(distance)));
+            // Adaptive fog: starts at 2× camera distance, ends at 6×
+            scene.fog = new THREE.Fog(0xf8fafc, distance * 2, distance * 6);
+        }
+
         // ---- Init ----
         function init() {
             const container = document.getElementById('canvas-container');
 
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf8fafc);
-            scene.fog = new THREE.Fog(0xf8fafc, 10, 50);
 
             camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
-            const ic = model.initialCamera || [5, 4, 5];
-            camera.position.set(ic[0], ic[1], ic[2]);
+            camera.position.set(5, 4, 6);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
             renderer.setSize(container.clientWidth, container.clientHeight);
@@ -676,6 +705,7 @@
             scene.add(new THREE.GridHelper(20, 20, 0xcbd5e1, 0xe2e8f0));
 
             buildModel();
+            fitCameraToModel();
 
             window.addEventListener('resize', () => {
                 camera.aspect = container.clientWidth / container.clientHeight;
