@@ -30,8 +30,10 @@ python -m http.server 3000
 
 ```
 用户 (frontend/index.html)
-  ├─ 📷 拍照 → POST /api/ocr {image} ──► llm_parser.ocr_image() (视觉 LLM)
-  │                                       └─► 返回识别文本
+  ├─ 📷 拍照 → POST /api/ocr {image} ──► llm_parser.ocr_image()
+  │      ├─► 阿里云 RecognizeEduQuestionOcr（题目识别，按次计费）
+  │      ├─► RecognizeAdvanced 降级（通用文字识别）
+  │      └─► DeepSeek LLM 规范化（修复数学符号 + 过滤图形标注）
   │
   └─ 题面文字 ──► POST /api/solve {problem: "…"} ──► backend/app.py
         │                                 ├─► llm_parser.py (LLM 题面解析，可选)
@@ -51,7 +53,7 @@ python -m http.server 3000
 - **`app.py`** — FastAPI 服务。`/api/solve` 接收题面，调用 `geometry_kernel.solve()` 返回解题 HTML。`/api/ocr` 接收图片，调用视觉 LLM 提取题目文字。`/api/health` 健康检查。生产模式下通过 `StaticFiles` 挂载 `frontend/` 实现同源部署。CORS 完全放开。
 - **`geometry_kernel.py`** — 计算核心。数据类：`Point`、`Segment`、`SolidModel`、`Solution`。使用 sympy 精确有理数/根式运算（`.answer_value` 前绝不浮点）。`solve()` 优先调用 `llm_parser` 做结构化题面解析，失败降级为关键词匹配。内置 4 种题型求解器（通过 `@register_solver` 注册）。
 - **`solver_registry.py`** — `@register_solver(shape, query)` 装饰器将求解函数注册到全局映射表，供 LLM prompt 动态生成和题面路由。
-- **`llm_parser.py`** — 两个功能：(1) `parse_problem()` 通过 OpenAI 兼容 API 将自然语言题面解析为结构化 spec；(2) `ocr_image()` 通过视觉 LLM 识别图片中的题目文字。通过 `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL` 环境变量配置。不可用时静默降级为关键词匹配。
+- **`llm_parser.py`** — 三个功能：(1) `ocr_image()` 优先阿里云文字识别 OCR（教育场景题目识别 + 通用文字识别降级），然后 DeepSeek LLM 规范化数学符号并过滤图形标注；(2) `parse_problem()` 通过 OpenAI 兼容 API 将题面解析为结构化 spec；(3) 不可用时静默降级为关键词匹配。配置：`ALIBABA_CLOUD_ACCESS_KEY_ID` / `ALIBABA_CLOUD_ACCESS_KEY_SECRET`（阿里云 OCR）+ `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL`（题面解析 + OCR 规范化）。
 - **`bodies.py`** — 几何体拓扑库（`cuboid`、`quad_pyramid`、`tri_pyramid`、`prism`）。返回 `{spheres, edges}` 供 3D 渲染。与 `geometry_kernel.py` 的坐标计算分离。
 - **`scripts/generate.py`** — CLI 工具：从命令行直接生成解题 HTML 文件（`python scripts/generate.py cube ./out.html`）。
 - **`template.html`** — 输出页面模板。使用 `__LESSON_DATA__` JSON 占位符。左侧 420px 解题面板（题面卡 + 答案卡 + 步骤 + 上一步/下一步），右侧弹性 3D 画布。Three.js r160 模块（OrbitControls + CSS2DRenderer）+ MathJax 3（CDN）。右上角含下载 HTML 按钮。

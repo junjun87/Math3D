@@ -1,6 +1,6 @@
 # Math3D — 立体几何交互解题
 
-最小可行产品：📷 拍照/相册/文字输入立体几何题面 → 视觉 LLM OCR 识别 → sympy 精确计算 → 全屏可交互 Three.js 3D 解题网页，右上角一键下载 HTML。
+最小可行产品：📷 拍照/相册/文字输入立体几何题面 → 阿里云教育 OCR（按次计费）+ DeepSeek 文字规范化 → sympy 精确计算 → 全屏可交互 Three.js 3D 解题网页，右上角一键下载 HTML。
 
 ## 当前支持题型
 
@@ -8,7 +8,7 @@
 - 正四棱锥：直线与平面所成角
 - 支持随机出题（随机题型 + 随机参数，自动筛除答案不规整的组合）
 - 支持 LLM 自然语言题面解析（可选，通过环境变量配置）
-- 支持拍照 OCR：视觉 LLM 识别图片中的题目文字
+- 支持拍照 OCR：阿里云文字识别（教育场景题目识别）+ DeepSeek LLM 规范化
 
 ## 项目结构
 
@@ -18,7 +18,7 @@
 │   ├── app.py               # FastAPI 服务（/api/solve + /api/ocr + 同源托管前端）
 │   ├── geometry_kernel.py   # sympy 精确计算核心 + 题型求解器
 │   ├── solver_registry.py   # @register_solver 题型注册表
-│   ├── llm_parser.py        # LLM 题面解析 + 视觉 OCR
+│   ├── llm_parser.py        # 阿里云 OCR + DeepSeek 题面解析与规范化
 │   ├── bodies.py            # 几何体拓扑库（顶点 + 棱）
 │   ├── template.html        # Three.js 数据驱动模板
 │   └── scripts/
@@ -26,7 +26,7 @@
 ├── frontend/
 │   └── index.html           # 多页面 UI（拍照/相册/文字/历史）
 ├── docker-compose.yml       # Docker Compose 一键部署
-├── .env.example             # LLM 配置模板
+├── .env.example             # 阿里云 OCR + LLM 配置模板
 ├── Dockerfile               # Docker 镜像构建
 ├── requirements.txt
 └── README.md
@@ -66,9 +66,9 @@ python -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 ## Docker 部署
 
 ```bash
-# 1. 配置 LLM（可选，用于拍照 OCR + 题面智能解析）
+# 1. 配置 OCR + LLM（可选，不配置则 OCR 不可用，题面解析降级为关键词匹配）
 cp .env.example .env
-# 编辑 .env 填入你的 API 密钥
+# 编辑 .env 填入阿里云 AccessKey + DeepSeek API 密钥
 
 # 2. 启动
 docker compose up -d
@@ -80,7 +80,7 @@ docker compose up -d --build
 ## 使用流程
 
 1. 📷 **拍照搜题** / 🖼️ 从相册选择 / ⌨️ 文字输入 — 三种方式提交题目
-2. 视觉 AI 自动识别图片中的题目文字（拍照模式）
+2. 阿里云 OCR 自动识别题目文字 + DeepSeek 修复数学符号（拍照模式）
 3. 点击「生成解题页」→ 自动跳转至全屏 3D 交互解题页
 4. 按「上一步/下一步」浏览解题过程，左侧公式与右侧 3D 高亮联动
 5. 点击右上角「下载 HTML」保存自包含课件
