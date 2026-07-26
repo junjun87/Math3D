@@ -97,25 +97,44 @@
         .entry-card.primary .sub { color: rgba(255,255,255,0.75); }
         .entry-card.primary:hover { box-shadow: 0 6px 20px rgba(37,99,235,0.35); }
         .home-scope {
-            width: 100%; max-width: 380px; margin: 0 auto 8px;
+            width: 100%; max-width: 420px; margin: 0 auto 8px;
             background: #fff; border-radius: var(--radius-lg);
-            border: 1px solid var(--g100); padding: 18px 20px;
+            border: 1px solid var(--g100); padding: 20px 20px 16px;
             box-shadow: var(--shadow-sm);
         }
-        .scope-title { font-size: 14px; font-weight: 600; color: var(--g700); margin-bottom: 12px; }
-        .scope-group { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+        .scope-title { font-size: 14px; font-weight: 600; color: var(--g700); margin-bottom: 14px; }
+        .scope-group { margin-bottom: 14px; }
         .scope-shape {
-            font-size: 12px; font-weight: 700; color: var(--p600);
-            background: var(--p50); padding: 4px 10px; border-radius: var(--radius-full);
-            white-space: nowrap; flex-shrink: 0; min-width: 64px; text-align: center;
+            font-size: 13px; font-weight: 700; color: var(--p600);
+            margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
         }
-        .scope-tags { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 2px; }
-        .scope-tags span {
-            font-size: 12px; color: var(--g500); background: var(--g50);
-            padding: 3px 10px; border-radius: var(--radius-full);
-            border: 1px solid var(--g100);
+        .scope-shape::after {
+            content: ''; flex: 1; height: 1px; background: var(--g100);
         }
-        .scope-note { font-size: 12px; color: var(--g400); margin-top: 6px; text-align: center; }
+        .scope-examples { display: flex; flex-direction: column; gap: 4px; }
+        .scope-example {
+            display: flex; align-items: center; gap: 8px; padding: 5px 10px;
+            border-radius: 6px; cursor: pointer; transition: background 0.15s;
+            font-size: 12px; color: var(--g600);
+        }
+        .scope-example:hover { background: var(--g50); }
+        .scope-example .ex-label { flex: 1; line-height: 1.4; }
+        .scope-example .ex-badge {
+            font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: var(--radius-full);
+            white-space: nowrap; flex-shrink: 0;
+        }
+        .ex-badge.sin  { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; }
+        .ex-badge.cos  { color: #0d9488; background: #f0fdfa; border: 1px solid #99f6e4; }
+        .ex-badge.dist { color: #7c3aed; background: #faf5ff; border: 1px solid #ddd6fe; }
+        .ex-badge.vol  { color: #db2777; background: #fdf2f8; border: 1px solid #fbcfe8; }
+        .ex-badge.range{ color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; }
+        .scope-note { font-size: 12px; color: var(--g400); margin-top: 8px; text-align: center; }
+        .scope-toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: #1e293b; color: #fff; font-size: 13px; padding: 8px 20px;
+            border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999;
+        }
+        .scope-toast.show { opacity: 1; }
         .home-footer { text-align: center; padding: 16px 0 36px; color: var(--g300); font-size: 11px; letter-spacing: 0.3px; }
 
         /* ---- Capture ---- */
@@ -273,22 +292,82 @@
         </div>
     </div>
     <div class="home-scope">
-        <div class="scope-title">📐 当前支持题型</div>
+        <div class="scope-title">📐 支持题型一览（点击可试）</div>
+
         <div class="scope-group">
-            <div class="scope-shape">正方体</div>
-            <div class="scope-tags">
-                <span>线面角</span><span>异面直线夹角</span><span>点面距离</span><span>动点取值范围</span>
+            <div class="scope-shape">🟦 正方体</div>
+            <div class="scope-examples">
+                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求直线 AC1 与平面 BDD1B1 所成角的正弦值。">
+                    <span class="ex-label">直线 AC₁ 与平面 BDD₁B₁ 的线面角</span>
+                    <span class="ex-badge sin">正弦值</span>
+                </div>
+                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求异面直线 A1C 与 AB 所成角的余弦值。">
+                    <span class="ex-label">异面直线 A₁C 与 AB 的夹角</span>
+                    <span class="ex-badge cos">余弦值</span>
+                </div>
+                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求点 A1 到平面 AB1C 的距离。">
+                    <span class="ex-label">点 A₁ 到平面 AB₁C 的距离</span>
+                    <span class="ex-badge dist">距离</span>
+                </div>
+                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，E,F 分别是棱 BC,CC1 的中点，P 是侧面 BCC1B1 内一点，若 A1P∥平面 AEF，求线段 A1P 长度的取值范围。">
+                    <span class="ex-label">动点 P 满足平行条件，求 |A₁P| 范围</span>
+                    <span class="ex-badge range">取值范围</span>
+                </div>
+                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求二面角 A-BD-C1 的余弦值。">
+                    <span class="ex-label">二面角 A-BD-C₁</span>
+                    <span class="ex-badge cos">余弦值</span>
+                </div>
+                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求该正方体的体积。">
+                    <span class="ex-label">正方体体积</span>
+                    <span class="ex-badge vol">体积</span>
+                </div>
             </div>
         </div>
+
         <div class="scope-group">
-            <div class="scope-shape">正四棱锥</div>
-            <div class="scope-tags">
-                <span>线面角</span>
+            <div class="scope-shape">🔺 正四面体</div>
+            <div class="scope-examples">
+                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求该正四面体的体积。">
+                    <span class="ex-label">正四面体体积</span>
+                    <span class="ex-badge vol">体积</span>
+                </div>
+                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求异面直线 AB 与 CD 所成角的余弦值。">
+                    <span class="ex-label">对棱 AB 与 CD 的夹角</span>
+                    <span class="ex-badge cos">余弦值</span>
+                </div>
+                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求直线 AB 与平面 BCD 所成角的正弦值。">
+                    <span class="ex-label">棱 AB 与对面 BCD 的线面角</span>
+                    <span class="ex-badge sin">正弦值</span>
+                </div>
+                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求二面角 A-BC-D 的余弦值。">
+                    <span class="ex-label">二面角 A-BC-D</span>
+                    <span class="ex-badge cos">余弦值</span>
+                </div>
             </div>
         </div>
-        <p class="scope-note">也可输入「随机」试试随机出题 ✨</p>
+
+        <div class="scope-group">
+            <div class="scope-shape">🔶 正四棱锥</div>
+            <div class="scope-examples">
+                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，E 为 PC 中点，求直线 BE 与平面 PAC 所成角的正弦值。">
+                    <span class="ex-label">中点 E，直线 BE 与平面 PAC 的线面角</span>
+                    <span class="ex-badge sin">正弦值</span>
+                </div>
+                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求侧面 PAB 与底面 ABCD 所成二面角的余弦值。">
+                    <span class="ex-label">侧面 PAB 与底面的二面角</span>
+                    <span class="ex-badge cos">余弦值</span>
+                </div>
+                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求该正四棱锥的体积。">
+                    <span class="ex-label">正四棱锥体积</span>
+                    <span class="ex-badge vol">体积</span>
+                </div>
+            </div>
+        </div>
+
+        <p class="scope-note">💡 也可输入「随机」试试随机出题 ✨</p>
     </div>
-    <div class="home-footer">Math3D v0.3.0</div>
+    <div id="scope-toast" class="scope-toast">📋 已填入输入框，点击提交即可</div>
+    <div class="home-footer">Math3D v0.4.0</div>
 </div>
 
 <!-- ========== Camera / Album Capture ========== -->
@@ -389,6 +468,21 @@ document.querySelectorAll('[data-nav]').forEach(card => {
             navigate('text');
         }
         else navigate(nav);
+    });
+});
+
+// ===== Scope Example Clicks =====
+const $scopeToast = document.getElementById('scope-toast');
+let _scopeToastTimer = 0;
+document.querySelectorAll('.scope-example[data-example]').forEach(el => {
+    el.addEventListener('click', () => {
+        document.getElementById('text-input').value = el.dataset.example;
+        $textStatus.className = 'status-msg';
+        navigate('text');
+        // Toast
+        clearTimeout(_scopeToastTimer);
+        $scopeToast.classList.add('show');
+        _scopeToastTimer = setTimeout(() => $scopeToast.classList.remove('show'), 1800);
     });
 });
 

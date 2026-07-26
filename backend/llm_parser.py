@@ -77,12 +77,16 @@ def _build_system_prompt() -> str:
 
     type_descriptions = {
         "cube": "正方体",
+        "regular_tetrahedron": "正四面体",
+        "regular_quad_pyramid": "正四棱锥",
     }
     query_descriptions = {
         "line_plane_angle": "线面角（直线与平面所成角的正弦值）",
         "line_line_angle": "异面直线夹角（余弦值）",
         "point_plane_distance": "点到平面距离",
         "point_range": "动点取值范围（动点在侧面上满足某条件时，线段长度的取值范围）",
+        "volume": "体积",
+        "dihedral_angle": "二面角（余弦值）",
     }
 
     # 生成支持的题型列表
@@ -111,7 +115,9 @@ def _build_system_prompt() -> str:
 
 ## 参数说明
 
-- edge：正方体的棱长（数值）。如果题面给出了具体数值则提取；如果出现字母变量（如 "棱长为 a"）则默认为 2。
+- edge：正方体的棱长 / 正四面体的棱长（数值）。如果题面给出了具体数值则提取；如果出现字母变量（如 "棱长为 a"）则默认为 2。
+- base_edge：正四棱锥的底面边长（数值）。默认为 2。
+- height：正四棱锥的高（数值）。默认为 1。
 - 其他参数按题面实际含义提取，使用数字键名。
 
 ## 规则
@@ -148,7 +154,31 @@ def _build_system_prompt() -> str:
 输出：{{"shape_type": "cube", "query_type": "point_plane_distance", "parameters": {{"edge": 2}}}}
 
 用户：正方体棱长为2，求异面直线A1C与AB所成角的余弦值。
-输出：{{"shape_type": "cube", "query_type": "line_line_angle", "parameters": {{"edge": 2}}}}"""
+输出：{{"shape_type": "cube", "query_type": "line_line_angle", "parameters": {{"edge": 2}}}}
+
+用户：正方体棱长为2，求二面角A-BD-C1的余弦值。
+输出：{{"shape_type": "cube", "query_type": "dihedral_angle", "parameters": {{"edge": 2}}}}
+
+用户：正方体棱长为3，求该正方体的体积。
+输出：{{"shape_type": "cube", "query_type": "volume", "parameters": {{"edge": 3}}}}
+
+用户：正四面体ABCD棱长为2，求该正四面体的体积。
+输出：{{"shape_type": "regular_tetrahedron", "query_type": "volume", "parameters": {{"edge": 2}}}}
+
+用户：正四面体棱长为3，求直线AB与平面BCD所成角的正弦值。
+输出：{{"shape_type": "regular_tetrahedron", "query_type": "line_plane_angle", "parameters": {{"edge": 3}}}}
+
+用户：正四面体棱长为2，求异面直线AB与CD所成角的余弦值。
+输出：{{"shape_type": "regular_tetrahedron", "query_type": "line_line_angle", "parameters": {{"edge": 2}}}}
+
+用户：正四面体棱长为2，求二面角A-BC-D的余弦值。
+输出：{{"shape_type": "regular_tetrahedron", "query_type": "dihedral_angle", "parameters": {{"edge": 2}}}}
+
+用户：正四棱锥P-ABCD底面边长2高1，求侧面PAB与底面ABCD所成二面角的余弦值。
+输出：{{"shape_type": "regular_quad_pyramid", "query_type": "dihedral_angle", "parameters": {{"base_edge": 2, "height": 1}}}}
+
+用户：正四棱锥底面边长2高1，求该正四棱锥的体积。
+输出：{{"shape_type": "regular_quad_pyramid", "query_type": "volume", "parameters": {{"base_edge": 2, "height": 1}}}}"""
 
 
 # ---------------------------------------------------------------------------
@@ -429,22 +459,49 @@ def _call_vision_llm(image_base64: str, media_type: str, config: LLMConfig) -> s
 # ---------------------------------------------------------------------------
 
 def _normalize_ocr_text(text: str) -> str:
-    """对 OCR 输出做安全的规范化（只做零歧义替换）。
+    """对 OCR 输出做安全的规范化。
 
-    不做有风险的替换（如 A1→A_1），这些交给 LLM 根据上下文判断。
+    只处理零歧义的 OCR 错误模式（根号、角度、度数等）。
+    有上下文依赖的修正（如 A1→A₁）交给 LLM 判断。
     """
     import re
 
-    # 全角数字 → 半角（OCR 偶尔输出全角）
+    # 全角字符 → 半角
     text = text.translate(str.maketrans(
-        '０１２３４５６７８９．，；：？！（）【】',
-        '0123456789.,;:?!()[]'
+        '０１２３４５６７８９．，；：？！（）【】＋－×÷＝＜＞％',
+        '0123456789.,;:?!()[]+-×÷=<>%'
     ))
-    # 数字后跟中文句号 → 度数符号（"30。" → "30°"）
-    text = re.sub(r'(\d)[。.]', r'\1°', text)
-    # 多余空白合并
+
+    # ── 根号 ──
+    # OCR 常把 √ 识别为 V / J / v（如 V3→√3, J2→√2）
+    # 只在独立出现（前无字母）时替换，避免误伤变量名
+    text = re.sub(r'(?<![a-zA-Z])[VJv](?=\d)', r'√', text)
+
+    # ── 度数 ──
+    # 30。→30° / 30o→30° / 30O→30° / 30°→30°（已正确的不动）
+    text = re.sub(r'(\d)[。.oO]', r'\1°', text)
+
+    # ── 角度符号 ──
+    # OCR 常把 ∠ 识别为 Z / L / 么 / 乙
+    # ZABC→∠ABC, LABC→∠ABC, 么ABC→∠ABC
+    text = re.sub(r'(?<![a-zA-Z])[ZL](?=[A-Z]{3})', r'∠', text)
+    text = re.sub(r'[么乙](?=[A-Z]{3})', r'∠', text)
+
+    # ── 三角形符号 ──
+    # OCR 常把 △ 识别为空或 A
+    # "AABC" 在几何上下文中应是 "△ABC"
+    # 安全策略：只替换已知的三角形顶点命名模式
+    text = re.sub(r'(?<![a-zA-Z])A(?=ABC)', r'△', text)
+
+    # ── 平行符号 ──
+    # OCR 可能丢失 ∥
+    text = re.sub(r'(?<![a-zA-Z])\\|\\|(?![a-zA-Z])', r'∥', text)
+
+    # ── 垂直符号 ──
+    text = re.sub(r'(?<![a-zA-Z])_\\|_(?![a-zA-Z])', r'⊥', text)
+
+    # ── 空白清理 ──
     text = re.sub(r'[ \t]+', ' ', text)
-    # 连续空行压缩
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
 
@@ -461,37 +518,56 @@ def _normalize_with_llm(raw_text: str) -> str:
     if not config.is_configured:
         return raw_text
 
-    prompt = """你是一个数学题面 OCR 清洗专家。请对 OCR 识别结果做以下处理：
+    prompt = """你是一个数学题面 OCR 清洗专家。请对以下 OCR 识别结果进行处理，输出清洗后的题目原文。
 
 ## 任务
 
-1. **修复数学符号**（根据上下文判断）：
-   - 将丢失的下标补回（如 A1C1 → A₁C₁，注意几何体中 A1 表示 A 的下标 1）
-   - 将根号恢复（如 V3 → √3）
-   - 将角度符号恢复（如 ZABC → ∠ABC）
-   - 将度数符号恢复（如 30。→ 30°）
-   - 将三角形符号恢复（如 △ABC）
+### 1. 修复下标
+OCR 经常丢失数学下标。在立体几何中，数字跟在字母后面通常表示下标：
+- A1 → A₁、C1 → C₁、B1 → B₁
+- A1C1 → A₁C₁（注意：两个字母都可能带下标）
+- AA1 → AA₁（前面的 A 没有下标）
+- 平面 BDD1B1 → 平面 BDD₁B₁
+- 保留格式：A_{1}、C_{1}
 
-2. **过滤无关文字**：
-   - 照片中如果有立体几何图形，图形上的标注字母（如顶点标签 A、B、C、D 等零散字母）不属于题目正文，请移除
-   - 只保留题目的自然语言描述，不要包含图形上的坐标/标注
+### 2. 修复根号
+OCR 经常把 √ 识别为 V 或 J：
+- V3 → √3
+- V2 → √2
+- V6 → √6
+- 2V3 → 2√3
 
-3. **保留下标格式**：
-   - 下标使用下划线加花括号：A_{1}、C_{1}、B_{1}
+### 3. 修复角度符号
+OCR 经常把 ∠ 识别为 Z、L 或其他字符：
+- ZABC → ∠ABC
+- LABC → ∠ABC
+- 如果角度符号完全丢失（如只写 ABC），根据"所成角""夹角"等上下文补回 ∠
+
+### 4. 修复度数符号
+OCR 经常把 ° 识别为句号或字母 o：
+- 30。→ 30°
+- 45o → 45°
+- 90° 保持
+
+### 5. 修复三角形符号
+OCR 可能丢失 △：
+- AABC → △ABC
+
+### 6. 修复平行/垂直符号
+- ∥ 可能被识别为 // 或 ||
+- ⊥ 可能被识别为 _|_
+
+### 7. 过滤图形标注
+立体几何照片中的图形上有零散的顶点标签（如单独的 A、B、C、D 等），这些不属于题目正文。请将它们移除，只保留完整的题目句子。
 
 ## 输出规则
-
-- 只输出清洗后的题目原文，不要加任何解释、前缀或后缀。
-- 如果无法确定某段文字是否属于题目，保留。
-- 用简体中文输出最终结果。"""
+- 只输出清洗后的题目原文，一行或两行即可
+- 不要加任何解释、前缀（如"清洗后："）或后缀
+- 用简体中文输出，保持原题的数学符号
+- 如果某处无法确定，保留原文"""
 
     try:
-        # 简化 prompt，DeepSeek 对小 prompt 响应更稳定
-        short_prompt = (
-            "OCR文字清洗：修正以下数学题OCR识别中的错字、乱码，"
-            "将下标补回（如A1→A₁），移除图形上的零散字母标注。只输出清洗后的题目。"
-        )
-        content = _call_llm(short_prompt, raw_text, config, use_json=False, max_tokens=4096)
+        content = _call_llm(prompt, raw_text, config, use_json=False, max_tokens=4096)
         logger.info("LLM normalized OCR (%d chars): %s", len(content), content[:300])
         return content.strip() if content.strip() else raw_text
     except Exception as e:
