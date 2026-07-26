@@ -132,6 +132,8 @@ def is_clean(expr, max_ops=7, max_radicand=60):
     e = sp.radsimp(sp.nsimplify(sp.simplify(expr)))
     if e.has(sp.zoo, sp.nan, sp.oo) or e.free_symbols:
         return False
+    if e.is_Float or e.has(sp.Float):
+        return False
     if sp.count_ops(e) > max_ops:
         return False
     for p in e.atoms(sp.Pow):
@@ -224,6 +226,7 @@ class Solution:
     target: list = field(default_factory=list)
     initial_camera: list = field(default_factory=list)
     scale: float = 1.5
+    text_only: bool = False
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -273,6 +276,25 @@ def build_regular_tetrahedron(edge=None):
     return {name: sp.simplify(k * v) for name, v in base.items()}
 
 
+def build_regular_triangular_prism(base_edge, height):
+    """正三棱柱 ABC-A1B1C1：底面为等边三角形，A 在原点，AB 沿 x 轴，C 在上方。
+
+    坐标约定（数学坐标，z 轴向上）：
+      - A=(0,0,0), B=(a,0,0), C=(a/2, a√3/2, 0)
+      - A1=(0,0,h), B1=(a,0,h), C1=(a/2, a√3/2, h)
+    """
+    a = sp.sympify(base_edge)
+    h = sp.sympify(height)
+    return {
+        "A": V(0, 0, 0),
+        "B": V(a, 0, 0),
+        "C": V(a / 2, a * sqrt(3) / 2, 0),
+        "A1": V(0, 0, h),
+        "B1": V(a, 0, h),
+        "C1": V(a / 2, a * sqrt(3) / 2, h),
+    }
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 题型求解器
 # ══════════════════════════════════════════════════════════════════════════════
@@ -293,7 +315,10 @@ def _build_lesson_data(
     lesson_meta: str = "交互解题",
     problem: str = "",
 ) -> dict:
-    """组装模板所需的完整 lesson data。"""
+    """组装模板所需的完整 lesson data。
+
+    ⚠️ 与 app.py 中 _build_lesson_data(solution) 对应 —— 修改 dict 结构时两边需同步。
+    """
     tp = to_three(pts, scale=scale)
     if target is None:
         names = list(tp)
@@ -318,8 +343,6 @@ def _build_lesson_data(
             "target": target,
             "initialCamera": initial_camera,
         },
-        "_answer_latex": answer_latex,
-        "_answer_value": answer_value,
     }
 
 
@@ -1466,6 +1489,848 @@ def solve_pyramid_dihedral_angle(base_edge=2, height=1) -> Solution:
     )
 
 
+# --- 正三棱柱 · 体积 ---
+
+@register_solver("regular_triangular_prism", "volume")
+def solve_prism_volume(base_edge=2, height=3) -> Solution:
+    """正三棱柱 ABC-A1B1C1，底面等边三角形边长为 base_edge，高为 height，求体积。"""
+    import bodies as _bodies
+    a = sp.Rational(base_edge)
+    h = sp.Rational(height)
+    pts = build_regular_triangular_prism(base_edge, height)
+
+    base_area = a**2 * sqrt(3) / 4
+    V_expr = sp.simplify(base_area * h)
+    ans_latex = tex(V_expr)
+    ans_val = float(V_expr)
+
+    problem_text = (
+        f"正三棱柱 $ABC-A_1B_1C_1$，底面等边三角形边长为 ${tex(a)}$，"
+        f"高为 ${tex(h)}$，求该正三棱柱的体积。"
+    )
+
+    topo = _bodies.prism()
+    tp = to_three(pts, scale=1.5)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, "正三棱柱 ABC-A₁B₁C₁ 的体积",
+        scale=1.5, spheres=topo["spheres"], edges=topo["edges"],
+        elements={
+            "Axis": {"type": "axes", "size": 3},
+        },
+        target=center, initial_camera=[4, 3, 5],
+        lesson_meta="交互解题 · 三棱柱体积", problem=problem_text,
+    )
+
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以 $A$ 为原点，$AB$ 沿 $x$ 轴，$AA_1$ 沿 $z$ 轴建系。</p>"
+                f"<p>底面等边三角形边长 ${tex(a)}$，高 ${tex(h)}$。</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+        {
+            "title": "计算体积",
+            "content": (
+                f"<p>底面等边三角形面积：$S = \\frac{{\\sqrt{{3}}}}{{4}}a^2"
+                f"= \\frac{{\\sqrt{{3}}}}{{4}} \\cdot {tex(a)}^2 = {tex(base_area)}$</p>"
+                f"<p>柱体体积：$V = S \\cdot h = {tex(base_area)} \\cdot {tex(h)} = {ans_latex}$</p>"
+            ),
+            "highlight": [],
+            "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=lesson["lesson"]["answerLabel"],
+        three_points=tp, spheres=topo["spheres"], edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center, initial_camera=[4, 3, 5], scale=1.5,
+    )
+
+
+# --- 正三棱柱 · 线面角 ---
+
+@register_solver("regular_triangular_prism", "line_plane_angle")
+def solve_prism_line_plane_angle(base_edge=2, height=3) -> Solution:
+    """正三棱柱 ABC-A1B1C1 中 AB₁ 与底面 ABC 所成角的正弦值。"""
+    import bodies as _bodies
+    a = sp.Rational(base_edge)
+    h = sp.Rational(height)
+    pts = build_regular_triangular_prism(base_edge, height)
+
+    AB1 = pts["B1"] - pts["A"]
+    # 底面 ABC 的法向量即 z 轴方向 (0,0,1)
+    n = V(0, 0, 1)
+    sin_theta = line_plane_angle_sin(AB1, n)
+    ans_latex = tex(sin_theta)
+    ans_val = float(sin_theta)
+
+    problem_text = (
+        f"正三棱柱 $ABC-A_1B_1C_1$，底面等边三角形边长为 ${tex(a)}$，"
+        f"高为 ${tex(h)}$，求直线 $AB_1$ 与底面 $ABC$ 所成角的正弦值。"
+    )
+
+    topo = _bodies.prism()
+    tp = to_three(pts, scale=1.5)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, "直线 AB₁ 与底面 ABC 所成角的正弦值",
+        scale=1.5, spheres=topo["spheres"], edges=topo["edges"],
+        elements={
+            "Line_AB1": {"type": "line", "a": "A", "b": "B1", "color": "emphasis", "depthTest": False},
+            "Plane_Base": {"type": "plane", "pts": ["A", "B", "C"]},
+            "Axis": {"type": "axes", "size": 3},
+        },
+        target=center, initial_camera=[4, 3, 5],
+        lesson_meta="交互解题 · 三棱柱线面角", problem=problem_text,
+    )
+
+    mp = {k: tex_vec(v) for k, v in pts.items()}
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以 $A$ 为原点，$AB$ 沿 $x$ 轴，$AA_1$ 沿 $z$ 轴建系。</p>"
+                f"<p>$A{mp['A']}, B_1{mp['B1']}$</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+        {
+            "title": "求 AB₁ 的方向向量",
+            "content": (
+                f"$$\\overrightarrow{{AB_1}} = B_1 - A = {tex_vec(AB1)}$$"
+            ),
+            "highlight": ["Line_AB1"],
+            "cameraPos": {"x": 3, "y": 5, "z": 4},
+        },
+        {
+            "title": "计算线面角正弦",
+            "content": (
+                f"<p>底面 $ABC$ 在 $z=0$ 平面，法向量 $\\vec n = (0,0,1)$。</p>"
+                f"$$\\sin\\theta = \\frac{{|\\overrightarrow{{AB_1}} \\cdot \\vec n|}}"
+                f"{{|\\overrightarrow{{AB_1}}| \\cdot |\\vec n|}}"
+                f"= \\frac{{{tex(sp.Abs(AB1.dot(n)))}}}"
+                f"{{{tex(sp.sqrt(sum(c**2 for c in AB1)))}}} = {ans_latex}$$"
+            ),
+            "highlight": ["Line_AB1", "Plane_Base"],
+            "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=lesson["lesson"]["answerLabel"],
+        three_points=tp, spheres=topo["spheres"], edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center, initial_camera=[4, 3, 5], scale=1.5,
+    )
+
+
+# --- 正三棱柱 · 点面距离 ---
+
+@register_solver("regular_triangular_prism", "point_plane_distance")
+def solve_prism_point_plane_distance(base_edge=2, height=3) -> Solution:
+    """正三棱柱 ABC-A1B1C1 中 C₁ 到侧面 ABB₁A₁ 的距离。"""
+    import bodies as _bodies
+    a = sp.Rational(base_edge)
+    h = sp.Rational(height)
+    pts = build_regular_triangular_prism(base_edge, height)
+
+    # 侧面 ABB₁A₁：平面 y=0（过 A, B, B₁）
+    n = normal_from_points(pts["A"], pts["B"], pts["B1"])
+    dist = point_plane_distance(pts["C1"], pts["A"], n)
+    ans_latex = tex(dist)
+    ans_val = float(dist)
+
+    problem_text = (
+        f"正三棱柱 $ABC-A_1B_1C_1$，底面等边三角形边长为 ${tex(a)}$，"
+        f"高为 ${tex(h)}$，求点 $C_1$ 到侧面 $ABB_1A_1$ 的距离。"
+    )
+
+    topo = _bodies.prism()
+    tp = to_three(pts, scale=1.5)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, "点 C₁ 到侧面 ABB₁A₁ 的距离",
+        scale=1.5, spheres=topo["spheres"], edges=topo["edges"],
+        elements={
+            "Point_C1": {"type": "sphere", "pt": "C1", "color": "emphasis", "radius": 0.18},
+            "Plane_Side": {"type": "plane", "pts": ["A", "B", "B1"]},
+            "Axis": {"type": "axes", "size": 3},
+        },
+        target=center, initial_camera=[2, 5, 3],
+        lesson_meta="交互解题 · 三棱柱点面距离", problem=problem_text,
+    )
+
+    mp = {k: tex_vec(v) for k, v in pts.items()}
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以 $A$ 为原点，$AB$ 沿 $x$ 轴，$AA_1$ 沿 $z$ 轴建系。</p>"
+                f"<p>$A{mp['A']}, B{mp['B']}, B_1{mp['B1']}, C_1{mp['C1']}$</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 2, "y": 5, "z": 3},
+        },
+        {
+            "title": "求侧面法向量",
+            "content": (
+                f"<p>侧面 $ABB_1A_1$ 由点 $A, B, B_1$ 确定。</p>"
+                f"<p>$\\overrightarrow{{AB}} = {tex_vec(pts['B'] - pts['A'])}, \\quad"
+                f"\\overrightarrow{{AB_1}} = {tex_vec(pts['B1'] - pts['A'])}$</p>"
+                f"<p>法向量 $\\vec n = \\overrightarrow{{AB}} \\times "
+                f"\\overrightarrow{{AB_1}} = {tex_vec(n)}$</p>"
+                f"<p>即平面 $y=0$。</p>"
+            ),
+            "highlight": ["Plane_Side"],
+            "cameraPos": {"x": 0, "y": 6, "z": 2},
+        },
+        {
+            "title": "计算点到平面距离",
+            "content": (
+                f"<p>$C_1$ 到平面 $y=0$ 的距离即 $C_1$ 的 $y$ 坐标：</p>"
+                f"$$d = |y_{{C_1}}| = \\frac{{\\sqrt{{3}}}}{{2}}a"
+                f"= \\frac{{\\sqrt{{3}}}}{{2}} \\cdot {tex(a)} = {ans_latex}$$"
+            ),
+            "highlight": ["Point_C1", "Plane_Side"],
+            "cameraPos": {"x": 2, "y": 5, "z": 3},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=lesson["lesson"]["answerLabel"],
+        three_points=tp, spheres=topo["spheres"], edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center, initial_camera=[2, 5, 3], scale=1.5,
+    )
+
+
+# --- 长方体 · 体积 ---
+
+@register_solver("cuboid", "volume")
+def solve_cuboid_volume(lx=3, ly=2, lz=2) -> Solution:
+    """长方体 ABCD-A1B1C1D1，长宽高为 lx, ly, lz，求体积。"""
+    import bodies as _bodies
+    lx_s, ly_s, lz_s = sp.Rational(lx), sp.Rational(ly), sp.Rational(lz)
+    pts = build_cuboid(lx, ly, lz)
+
+    V_expr = volume_box(lx_s, ly_s, lz_s)
+    ans_latex = tex(V_expr)
+    ans_val = float(V_expr)
+
+    problem_text = (
+        f"长方体 $ABCD-A_1B_1C_1D_1$，$AB={tex(lx_s)}$，$AD={tex(ly_s)}$，"
+        f"$AA_1={tex(lz_s)}$，求该长方体的体积。"
+    )
+
+    topo = _bodies.cuboid()
+    tp = to_three(pts, scale=1.5)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, "长方体 ABCD-A₁B₁C₁D₁ 的体积",
+        scale=1.5, spheres=topo["spheres"], edges=topo["edges"],
+        elements={"Axis": {"type": "axes", "size": 3}},
+        target=center, initial_camera=[5, 4, 5],
+        lesson_meta="交互解题 · 长方体体积", problem=problem_text,
+    )
+
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以 $A$ 为原点建系，$AB={tex(lx_s)}$，$AD={tex(ly_s)}$，$AA_1={tex(lz_s)}$。</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 5, "y": 4, "z": 5},
+        },
+        {
+            "title": "计算体积",
+            "content": (
+                f"<p>长方体体积公式：$V = AB \\cdot AD \\cdot AA_1$</p>"
+                f"$$V = {tex(lx_s)} \\cdot {tex(ly_s)} \\cdot {tex(lz_s)} = {ans_latex}$$"
+            ),
+            "highlight": [], "cameraPos": {"x": 5, "y": 4, "z": 5},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=lesson["lesson"]["answerLabel"],
+        three_points=tp, spheres=topo["spheres"], edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center, initial_camera=[5, 4, 5], scale=1.5,
+    )
+
+
+# --- 长方体 · 线面角 ---
+
+@register_solver("cuboid", "line_plane_angle")
+def solve_cuboid_line_plane_angle(lx=3, ly=2, lz=2) -> Solution:
+    """长方体 ABCD-A1B1C1D1 中 AC₁ 与平面 BDD₁B₁ 所成角的正弦值。"""
+    import bodies as _bodies
+    lx_s, ly_s, lz_s = sp.Rational(lx), sp.Rational(ly), sp.Rational(lz)
+    pts = build_cuboid(lx, ly, lz)
+
+    AC1 = pts["C1"] - pts["A"]
+    BD = pts["D"] - pts["B"]
+    BB1 = pts["B1"] - pts["B"]
+    n = BD.cross(BB1)
+    n_simpl = simplify_vec(n)
+    sin_theta = line_plane_angle_sin(AC1, n)
+    ans_latex = tex(sin_theta)
+    ans_val = float(sin_theta)
+
+    problem_text = (
+        f"长方体 $ABCD-A_1B_1C_1D_1$，$AB={tex(lx_s)}$，$AD={tex(ly_s)}$，"
+        f"$AA_1={tex(lz_s)}$，求直线 $AC_1$ 与平面 $BDD_1B_1$ 所成角的正弦值。"
+    )
+
+    topo = _bodies.cuboid()
+    tp = to_three(pts, scale=1.5)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, "直线 AC₁ 与平面 BDD₁B₁ 所成角的正弦值",
+        scale=1.5, spheres=topo["spheres"], edges=topo["edges"],
+        elements={
+            "Line_AC1": {"type": "line", "a": "A", "b": "C1", "color": "emphasis", "depthTest": False},
+            "Plane_BDD1B1": {"type": "plane", "pts": ["B", "D", "D1", "B1"]},
+            "Normal_Vector": {"type": "arrow", "origin": "B", "dir": [0, 0.8, 1], "length": 1.6, "color": "normal"},
+            "Axis": {"type": "axes", "size": 3},
+        },
+        target=center, initial_camera=[5, 4, 5],
+        lesson_meta="交互解题 · 长方体线面角", problem=problem_text,
+    )
+
+    mp = {k: tex_vec(v) for k, v in pts.items()}
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以 $A$ 为原点建系，$AB={tex(lx_s)}$，$AD={tex(ly_s)}$，$AA_1={tex(lz_s)}$。</p>"
+                f"<p>$A{mp['A']}, C_1{mp['C1']}, B{mp['B']}, D{mp['D']}, B_1{mp['B1']}, D_1{mp['D1']}$</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 5, "y": 4, "z": 5},
+        },
+        {
+            "title": "求直线方向向量",
+            "content": (
+                f"$$\\overrightarrow{{AC_1}} = C_1 - A = {tex_vec(AC1)}$$"
+            ),
+            "highlight": ["Line_AC1"], "cameraPos": {"x": 3, "y": 5, "z": 7},
+        },
+        {
+            "title": "求平面法向量",
+            "content": (
+                f"<p>平面 $BDD_1B_1$ 中：</p>"
+                f"$$\\overrightarrow{{BD}} = {tex_vec(BD)}, \\quad \\overrightarrow{{BB_1}} = {tex_vec(BB1)}$$"
+                f"<p>法向量 $\\vec n = \\overrightarrow{{BD}} \\times \\overrightarrow{{BB_1}} = {tex_vec(n)}$</p>"
+                f"<p>简化取 $\\vec n = {tex_vec(n_simpl)}$</p>"
+            ),
+            "highlight": ["Line_AC1", "Plane_BDD1B1", "Normal_Vector"],
+            "cameraPos": {"x": 4, "y": 5, "z": 5},
+        },
+        {
+            "title": "计算线面角正弦值",
+            "content": (
+                f"$$\\sin\\theta = \\frac{{|\\overrightarrow{{AC_1}} \\cdot \\vec n|}}"
+                f"{{|\\overrightarrow{{AC_1}}| \\cdot |\\vec n|}} = {ans_latex}$$"
+            ),
+            "highlight": ["Line_AC1", "Plane_BDD1B1", "Normal_Vector"],
+            "cameraPos": {"x": 5, "y": 4, "z": 5},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=lesson["lesson"]["answerLabel"],
+        three_points=tp, spheres=topo["spheres"], edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center, initial_camera=[5, 4, 5], scale=1.5,
+    )
+
+
+# --- 长方体 · 异面直线夹角 ---
+
+@register_solver("cuboid", "line_line_angle")
+def solve_cuboid_line_line_angle(lx=3, ly=2, lz=2) -> Solution:
+    """长方体 ABCD-A1B1C1D1 中异面直线 A₁C₁ 与 BD 所成角的余弦值。"""
+    import bodies as _bodies
+    lx_s, ly_s, lz_s = sp.Rational(lx), sp.Rational(ly), sp.Rational(lz)
+    pts = build_cuboid(lx, ly, lz)
+
+    A1C1 = pts["C1"] - pts["A1"]
+    BD = pts["D"] - pts["B"]
+    cos_theta = line_line_angle_cos(A1C1, BD)
+    ans_latex = tex(cos_theta)
+    ans_val = float(cos_theta)
+
+    problem_text = (
+        f"长方体 $ABCD-A_1B_1C_1D_1$，$AB={tex(lx_s)}$，$AD={tex(ly_s)}$，"
+        f"$AA_1={tex(lz_s)}$，求异面直线 $A_1C_1$ 与 $BD$ 所成角的余弦值。"
+    )
+
+    topo = _bodies.cuboid()
+    tp = to_three(pts, scale=1.5)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, "异面直线 A₁C₁ 与 BD 所成角的余弦值",
+        scale=1.5, spheres=topo["spheres"], edges=topo["edges"],
+        elements={
+            "Line_A1C1": {"type": "line", "a": "A1", "b": "C1", "color": "emphasis", "depthTest": False},
+            "Line_BD": {"type": "line", "a": "B", "b": "D", "color": "normal", "depthTest": False},
+            "Axis": {"type": "axes", "size": 3},
+        },
+        target=center, initial_camera=[5, 4, 5],
+        lesson_meta="交互解题 · 长方体异面直线", problem=problem_text,
+    )
+
+    mp = {k: tex_vec(v) for k, v in pts.items()}
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以 $A$ 为原点建系，$AB={tex(lx_s)}$，$AD={tex(ly_s)}$，$AA_1={tex(lz_s)}$。</p>"
+                f"<p>$A_1{mp['A1']}, C_1{mp['C1']}, B{mp['B']}, D{mp['D']}$</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 5, "y": 4, "z": 5},
+        },
+        {
+            "title": "求两直线方向向量",
+            "content": (
+                f"$$\\overrightarrow{{A_1C_1}} = {tex_vec(A1C1)}, \\quad \\overrightarrow{{BD}} = {tex_vec(BD)}$$"
+            ),
+            "highlight": ["Line_A1C1", "Line_BD"],
+            "cameraPos": {"x": 3, "y": 5, "z": 6},
+        },
+        {
+            "title": "计算夹角余弦",
+            "content": (
+                f"$$\\cos\\theta = \\frac{{|\\overrightarrow{{A_1C_1}} \\cdot \\overrightarrow{{BD}}|}}"
+                f"{{|\\overrightarrow{{A_1C_1}}| \\cdot |\\overrightarrow{{BD}}|}} = {ans_latex}$$"
+                f"<p>注意：此为长方体，长宽不等，夹角与正方体不同。</p>"
+            ),
+            "highlight": ["Line_A1C1", "Line_BD"],
+            "cameraPos": {"x": 5, "y": 4, "z": 5},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=lesson["lesson"]["answerLabel"],
+        three_points=tp, spheres=topo["spheres"], edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center, initial_camera=[5, 4, 5], scale=1.5,
+    )
+
+
+# --- 正四面体 · 点面距离 ---
+
+@register_solver("regular_tetrahedron", "point_plane_distance")
+def solve_tetra_point_plane_distance(edge=2) -> Solution:
+    """正四面体 ABCD 中点 A 到平面 BCD 的距离（即高）。"""
+    import bodies as _bodies
+    a = sp.Rational(edge)
+    pts = build_regular_tetrahedron(edge)
+
+    n = normal_from_points(pts["B"], pts["C"], pts["D"])
+    dist = point_plane_distance(pts["A"], pts["B"], n)
+    ans_latex = tex(dist)
+    ans_val = float(dist)
+
+    problem_text = (
+        f"正四面体 $ABCD$ 棱长为 ${tex(a)}$，"
+        f"求点 $A$ 到平面 $BCD$ 的距离。"
+    )
+
+    topo = _bodies.tri_pyramid(apex="D", base=("A", "B", "C"))
+    tp = to_three(pts, scale=2.5)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, "点 A 到平面 BCD 的距离（四面体的高）",
+        scale=2.5, spheres=topo["spheres"], edges=topo["edges"],
+        elements={
+            "Point_A": {"type": "sphere", "pt": "A", "color": "emphasis", "radius": 0.18},
+            "Plane_BCD": {"type": "plane", "pts": ["B", "C", "D"]},
+            "Axis": {"type": "axes", "size": 3},
+        },
+        target=center, initial_camera=[4, 3, 5],
+        lesson_meta="交互解题 · 正四面体点面距离", problem=problem_text,
+    )
+
+    mp = {k: tex_vec(v) for k, v in pts.items()}
+    n_simpl = simplify_vec(n)
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以正四面体中心为原点建系，棱长为 ${tex(a)}$。</p>"
+                f"<p>$A{mp['A']}, B{mp['B']}, C{mp['C']}, D{mp['D']}$</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+        {
+            "title": "求平面 BCD 的法向量",
+            "content": (
+                f"<p>$\\overrightarrow{{BC}} = {tex_vec(pts['C'] - pts['B'])}, \\quad"
+                f"\\overrightarrow{{BD}} = {tex_vec(pts['D'] - pts['B'])}$</p>"
+                f"<p>法向量 $\\vec n = \\overrightarrow{{BC}} \\times \\overrightarrow{{BD}} = {tex_vec(n)}$</p>"
+                f"<p>简化取 $\\vec n = {tex_vec(n_simpl)}$</p>"
+            ),
+            "highlight": ["Plane_BCD"],
+            "cameraPos": {"x": 4, "y": 5, "z": 3},
+        },
+        {
+            "title": "计算点面距离",
+            "content": (
+                f"<p>点 $A$ 到平面 $BCD$ 的距离即为正四面体的高：</p>"
+                f"$$d = \\frac{{|\\overrightarrow{{BA}} \\cdot \\vec n|}}{{|\\vec n|}}"
+                f"= {ans_latex} = \\frac{{\\sqrt{{6}}}}{{3}}a$$"
+            ),
+            "highlight": ["Point_A", "Plane_BCD"],
+            "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=lesson["lesson"]["answerLabel"],
+        three_points=tp, spheres=topo["spheres"], edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center, initial_camera=[4, 3, 5], scale=2.5,
+    )
+
+
+# --- 正四棱锥 · 异面直线夹角 ---
+
+@register_solver("regular_quad_pyramid", "line_line_angle")
+def solve_pyramid_line_line_angle(base_edge=2, height=1) -> Solution:
+    """正四棱锥 P-ABCD 中异面直线 PC 与 AB 所成角的余弦值。"""
+    import bodies as _bodies
+    pts = build_regular_quad_pyramid(base_edge, height)
+
+    PC = pts["C"] - pts["P"]
+    AB = pts["B"] - pts["A"]
+    cos_theta = line_line_angle_cos(PC, AB)
+    ans_latex = tex(cos_theta)
+    ans_val = float(cos_theta)
+
+    problem_text = (
+        f"正四棱锥 $P-ABCD$，底面边长 ${base_edge}$，高 ${height}$，"
+        f"求异面直线 $PC$ 与 $AB$ 所成角的余弦值。"
+    )
+
+    topo = _bodies.quad_pyramid()
+    tp = to_three(pts, scale=1.5)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, "异面直线 PC 与 AB 所成角的余弦值",
+        scale=1.5, spheres=topo["spheres"], edges=topo["edges"],
+        elements={
+            "Line_PC": {"type": "line", "a": "P", "b": "C", "color": "emphasis", "depthTest": False},
+            "Line_AB": {"type": "line", "a": "A", "b": "B", "color": "normal", "depthTest": False},
+            "Axis": {"type": "axes", "size": 2.5},
+        },
+        target=center, initial_camera=[4, 3, 5],
+        lesson_meta="交互解题 · 四棱锥异面直线", problem=problem_text,
+    )
+
+    mp = {k: tex_vec(v) for k, v in pts.items()}
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以底面中心 $O$ 为原点建系，底面边长 ${base_edge}$，高 ${height}$。</p>"
+                f"<p>$P{mp['P']}, C{mp['C']}, A{mp['A']}, B{mp['B']}$</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+        {
+            "title": "求方向向量",
+            "content": (
+                f"$$\\overrightarrow{{PC}} = {tex_vec(PC)}, \\quad \\overrightarrow{{AB}} = {tex_vec(AB)}$$"
+            ),
+            "highlight": ["Line_PC", "Line_AB"],
+            "cameraPos": {"x": 3, "y": 5, "z": 4},
+        },
+        {
+            "title": "计算夹角余弦",
+            "content": (
+                f"$$\\cos\\theta = \\frac{{|\\overrightarrow{{PC}} \\cdot \\overrightarrow{{AB}}|}}"
+                f"{{|\\overrightarrow{{PC}}| \\cdot |\\overrightarrow{{AB}}|}} = {ans_latex}$$"
+            ),
+            "highlight": ["Line_PC", "Line_AB"],
+            "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=lesson["lesson"]["answerLabel"],
+        three_points=tp, spheres=topo["spheres"], edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center, initial_camera=[4, 3, 5], scale=1.5,
+    )
+
+
+# --- 正四棱锥 · 点面距离 ---
+
+@register_solver("regular_quad_pyramid", "point_plane_distance")
+def solve_pyramid_point_plane_distance(base_edge=2, height=1) -> Solution:
+    """正四棱锥 P-ABCD 中点 B 到平面 PAC 的距离。"""
+    import bodies as _bodies
+    pts = build_regular_quad_pyramid(base_edge, height)
+
+    n = normal_from_points(pts["P"], pts["A"], pts["C"])
+    dist = point_plane_distance(pts["B"], pts["P"], n)
+    ans_latex = tex(dist)
+    ans_val = float(dist)
+
+    problem_text = (
+        f"正四棱锥 $P-ABCD$，底面边长 ${base_edge}$，高 ${height}$，"
+        f"求点 $B$ 到平面 $PAC$ 的距离。"
+    )
+
+    topo = _bodies.quad_pyramid()
+    tp = to_three(pts, scale=1.5)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, "点 B 到平面 PAC 的距离",
+        scale=1.5, spheres=topo["spheres"], edges=topo["edges"],
+        elements={
+            "Point_B": {"type": "sphere", "pt": "B", "color": "emphasis", "radius": 0.18},
+            "Plane_PAC": {"type": "plane", "pts": ["P", "A", "C"]},
+            "Axis": {"type": "axes", "size": 2.5},
+        },
+        target=center, initial_camera=[4, 3, 5],
+        lesson_meta="交互解题 · 四棱锥点面距离", problem=problem_text,
+    )
+
+    mp = {k: tex_vec(v) for k, v in pts.items()}
+    n_simpl = simplify_vec(n)
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以底面中心 $O$ 为原点建系，底面边长 ${base_edge}$，高 ${height}$。</p>"
+                f"<p>$P{mp['P']}, A{mp['A']}, C{mp['C']}, B{mp['B']}$</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+        {
+            "title": "分析平面 PAC",
+            "content": (
+                f"<p>$P, A, C$ 三点均在 $y=0$ 平面（$xOz$ 面）上。</p>"
+                f"<p>故平面 $PAC$ 即 $y=0$ 平面，法向量 $\\vec n = (0, 1, 0)$。</p>"
+            ),
+            "highlight": ["Plane_PAC"],
+            "cameraPos": {"x": 4, "y": 5, "z": 3},
+        },
+        {
+            "title": "计算点 B 到平面的距离",
+            "content": (
+                f"<p>$B$ 的 $y$ 坐标为 $d = \\frac{{a}}{{\\sqrt{{2}}}}$（半对角线）。</p>"
+                f"<p>故 $d = |y_B| = {ans_latex}$</p>"
+            ),
+            "highlight": ["Point_B", "Plane_PAC"],
+            "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=lesson["lesson"]["answerLabel"],
+        three_points=tp, spheres=topo["spheres"], edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center, initial_camera=[4, 3, 5], scale=1.5,
+    )
+
+
+# --- 正三棱柱 · 二面角 ---
+
+@register_solver("regular_triangular_prism", "dihedral_angle")
+def solve_prism_dihedral_angle(base_edge=2, height=3) -> Solution:
+    """正三棱柱 ABC-A1B1C1 中侧面 ABB₁A₁ 与 BCC₁B₁ 所成二面角的余弦值。"""
+    import bodies as _bodies
+    pts = build_regular_triangular_prism(base_edge, height)
+
+    # 侧面 ABB₁A₁ → 点 A,B,B₁ 确定，法向量 n1
+    n1 = normal_from_points(pts["A"], pts["B"], pts["B1"])
+    # 侧面 BCC₁B₁ → 点 B,C,B₁ 确定，法向量 n2
+    n2 = normal_from_points(pts["B"], pts["C"], pts["B1"])
+    cos_theta = sp.simplify(sp.Abs(dihedral_cos_from_normals(n1, n2)))
+    ans_latex = tex(cos_theta)
+    ans_val = float(cos_theta)
+
+    problem_text = (
+        f"正三棱柱 $ABC-A_1B_1C_1$，底面等边三角形边长为 ${base_edge}$，"
+        f"高为 ${height}$，求侧面 $ABB_1A_1$ 与 $BCC_1B_1$ 所成二面角的余弦值。"
+    )
+
+    topo = _bodies.prism()
+    tp = to_three(pts, scale=1.5)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, "侧面 ABB₁A₁ 与 BCC₁B₁ 所成二面角的余弦值",
+        scale=1.5, spheres=topo["spheres"], edges=topo["edges"],
+        elements={
+            "Plane_ABB1A1": {"type": "plane", "pts": ["A", "B", "B1"]},
+            "Plane_BCC1B1": {"type": "plane", "pts": ["B", "C", "B1"]},
+            "Edge_BB1": {"type": "line", "a": "B", "b": "B1", "color": "emphasis", "depthTest": False},
+            "Axis": {"type": "axes", "size": 3},
+        },
+        target=center, initial_camera=[4, 3, 5],
+        lesson_meta="交互解题 · 三棱柱二面角", problem=problem_text,
+    )
+
+    n1_simpl = simplify_vec(n1)
+    n2_simpl = simplify_vec(n2)
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以 $A$ 为原点建系，底面等边三角形边长 ${base_edge}$，高 ${height}$。</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+        {
+            "title": "求两侧面的法向量",
+            "content": (
+                f"<p>侧面 $ABB_1A_1$：$\\vec n_1 = {tex_vec(n1_simpl)}$</p>"
+                f"<p>侧面 $BCC_1B_1$：$\\vec n_2 = {tex_vec(n2_simpl)}$</p>"
+            ),
+            "highlight": ["Plane_ABB1A1", "Plane_BCC1B1", "Edge_BB1"],
+            "cameraPos": {"x": 2, "y": 5, "z": 3},
+        },
+        {
+            "title": "计算二面角余弦",
+            "content": (
+                f"<p>正三棱柱相邻侧面夹角为 $60^\\circ$：</p>"
+                f"$$\\cos\\theta = \\frac{{|\\vec n_1 \\cdot \\vec n_2|}}"
+                f"{{|\\vec n_1| \\cdot |\\vec n_2|}} = {ans_latex}$$"
+            ),
+            "highlight": ["Plane_ABB1A1", "Plane_BCC1B1", "Edge_BB1"],
+            "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=lesson["lesson"]["answerLabel"],
+        three_points=tp, spheres=topo["spheres"], edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center, initial_camera=[4, 3, 5], scale=1.5,
+    )
+
+
+# --- 正三棱柱 · 异面直线夹角 ---
+
+@register_solver("regular_triangular_prism", "line_line_angle")
+def solve_prism_line_line_angle(base_edge=2, height=3) -> Solution:
+    """正三棱柱 ABC-A1B1C1 中异面直线 AC₁ 与 BC 所成角的余弦值。"""
+    import bodies as _bodies
+    pts = build_regular_triangular_prism(base_edge, height)
+
+    AC1 = pts["C1"] - pts["A"]
+    BC = pts["C"] - pts["B"]
+    cos_theta = line_line_angle_cos(AC1, BC)
+    ans_latex = tex(cos_theta)
+    ans_val = float(cos_theta)
+
+    problem_text = (
+        f"正三棱柱 $ABC-A_1B_1C_1$，底面等边三角形边长为 ${base_edge}$，"
+        f"高为 ${height}$，求异面直线 $AC_1$ 与 $BC$ 所成角的余弦值。"
+    )
+
+    topo = _bodies.prism()
+    tp = to_three(pts, scale=1.5)
+    names = list(tp)
+    center = [sum(tp[k][i] for k in names) / len(names) for i in range(3)]
+
+    lesson = _build_lesson_data(
+        pts, [], ans_latex, ans_val, "异面直线 AC₁ 与 BC 所成角的余弦值",
+        scale=1.5, spheres=topo["spheres"], edges=topo["edges"],
+        elements={
+            "Line_AC1": {"type": "line", "a": "A", "b": "C1", "color": "emphasis", "depthTest": False},
+            "Line_BC": {"type": "line", "a": "B", "b": "C", "color": "normal", "depthTest": False},
+            "Axis": {"type": "axes", "size": 3},
+        },
+        target=center, initial_camera=[4, 3, 5],
+        lesson_meta="交互解题 · 三棱柱异面直线", problem=problem_text,
+    )
+
+    mp = {k: tex_vec(v) for k, v in pts.items()}
+    steps = [
+        {
+            "title": "建立空间直角坐标系",
+            "content": (
+                f"<p>以 $A$ 为原点建系，底面等边三角形边长 ${base_edge}$，高 ${height}$。</p>"
+                f"<p>$A{mp['A']}, C_1{mp['C1']}, B{mp['B']}, C{mp['C']}$</p>"
+            ),
+            "highlight": ["Axis"], "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+        {
+            "title": "求方向向量",
+            "content": (
+                f"$$\\overrightarrow{{AC_1}} = {tex_vec(AC1)}, \\quad \\overrightarrow{{BC}} = {tex_vec(BC)}$$"
+            ),
+            "highlight": ["Line_AC1", "Line_BC"],
+            "cameraPos": {"x": 3, "y": 5, "z": 5},
+        },
+        {
+            "title": "计算夹角余弦",
+            "content": (
+                f"$$\\cos\\theta = \\frac{{|\\overrightarrow{{AC_1}} \\cdot \\overrightarrow{{BC}}|}}"
+                f"{{|\\overrightarrow{{AC_1}}| \\cdot |\\overrightarrow{{BC}}|}} = {ans_latex}$$"
+            ),
+            "highlight": ["Line_AC1", "Line_BC"],
+            "cameraPos": {"x": 4, "y": 3, "z": 5},
+        },
+    ]
+    lesson["steps"] = steps
+
+    return Solution(
+        problem=problem_text, steps=steps, answer_latex=ans_latex, answer_value=ans_val,
+        model=SolidModel(),
+        lesson_meta=lesson["lesson"]["meta"], answer_label=lesson["lesson"]["answerLabel"],
+        three_points=tp, spheres=topo["spheres"], edges=topo["edges"],
+        elements=lesson["model"]["elements"], target=center, initial_camera=[4, 3, 5], scale=1.5,
+    )
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 随机出题
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1485,6 +2350,20 @@ _RANDOM_TEMPLATES: List[Callable[..., Solution]] = [
     solve_tetra_dihedral_angle,
     solve_pyramid_volume,
     solve_pyramid_dihedral_angle,
+    # --- 三棱柱 ---
+    solve_prism_volume,
+    solve_prism_line_plane_angle,
+    solve_prism_point_plane_distance,
+    # --- 长方体 ---
+    solve_cuboid_volume,
+    solve_cuboid_line_plane_angle,
+    solve_cuboid_line_line_angle,
+    # --- 缺口补全 ---
+    solve_tetra_point_plane_distance,
+    solve_pyramid_line_line_angle,
+    solve_pyramid_point_plane_distance,
+    solve_prism_dihedral_angle,
+    solve_prism_line_line_angle,
 ]
 
 
@@ -1550,6 +2429,8 @@ def _keyword_fallback(problem_text: str) -> Solution:
 
     # --- 正四面体（独立匹配，优先级高）---
     if "正四面体" in problem_text or "四面体" in problem_text:
+        if "距离" in problem_text:
+            return solve_tetra_point_plane_distance()
         if "体积" in problem_text:
             return solve_tetra_volume()
         if "二面角" in problem_text:
@@ -1558,8 +2439,17 @@ def _keyword_fallback(problem_text: str) -> Solution:
             return solve_tetra_line_line_angle()
         if "线面角" in problem_text or ("所成角" in problem_text and "平面" in problem_text):
             return solve_tetra_line_plane_angle()
-        # 正四面体但不确定题型 → 默认体积
         return solve_tetra_volume()
+
+    # --- 长方体（独立匹配）---
+    if "长方体" in problem_text or "cuboid" in lowered:
+        if "体积" in problem_text:
+            return solve_cuboid_volume()
+        if "异面" in problem_text:
+            return solve_cuboid_line_line_angle()
+        if "线面角" in problem_text or "所成角" in problem_text:
+            return solve_cuboid_line_plane_angle()
+        return solve_cuboid_volume()
 
     # --- 体积（跨几何体）---
     if "体积" in problem_text:
@@ -1575,20 +2465,42 @@ def _keyword_fallback(problem_text: str) -> Solution:
         if "四棱锥" in problem_text or "pyramid" in lowered:
             return solve_pyramid_dihedral_angle()
 
-    # 异面直线夹角
+    # 异面直线夹角（非长方体/非正四面体的回退）
     if "异面" in problem_text or "skew" in lowered:
+        if "四棱锥" in problem_text:
+            return solve_pyramid_line_line_angle()
         return solve_cube_line_line_angle()
 
-    # 点到平面距离
+    # 点到平面距离（非正四面体的回退）
     if ("距离" in problem_text or "distance" in lowered) and "平面" in problem_text:
+        if "四棱锥" in problem_text:
+            return solve_pyramid_point_plane_distance()
         return solve_cube_point_plane_distance()
 
     # 线面角（直线与平面所成角）
     if "线面角" in problem_text or ("所成角" in problem_text and "平面" in problem_text):
         return solve_line_plane_angle_cube(edge=2)
 
-    # 正四棱锥（非体积/二面角）
+    # --- 三棱柱 ---
+    if "三棱柱" in problem_text or "prism" in lowered:
+        if "体积" in problem_text:
+            return solve_prism_volume()
+        if "二面角" in problem_text:
+            return solve_prism_dihedral_angle()
+        if "异面" in problem_text:
+            return solve_prism_line_line_angle()
+        if "距离" in problem_text:
+            return solve_prism_point_plane_distance()
+        if "线面角" in problem_text or "所成角" in problem_text:
+            return solve_prism_line_plane_angle()
+        return solve_prism_volume()
+
+    # 正四棱锥（兜底）
     if "四棱锥" in problem_text or "pyramid" in lowered:
+        if "异面" in problem_text:
+            return solve_pyramid_line_line_angle()
+        if "距离" in problem_text:
+            return solve_pyramid_point_plane_distance()
         return solve_pyramid_line_plane_angle()
 
     # 动点取值范围（动点在侧面上满足条件，求线段长度范围）
@@ -1613,8 +2525,8 @@ def _keyword_fallback(problem_text: str) -> Solution:
 def solve(problem_text: str) -> Solution:
     """解析题面并求解。
 
-    优先尝试 LLM 结构化解析；LLM 不可用或解析失败时
-    降级到关键词匹配。
+    优先尝试 LLM 结构化解析 → 关键词匹配 → LLM 纯文字解题。
+    三层降级确保任何题目都有可用输出。
     """
     # Phase 1: LLM 解析
     parse_error_msg = None
@@ -1637,7 +2549,6 @@ def solve(problem_text: str) -> Solution:
     except llm_parser.LLMNotConfiguredError:
         logger.info("LLM not configured; falling back to keyword matching")
     except llm_parser.LLMParseError as e:
-        # LLM 明确返回不支持 → 保留错误信息，降级时也不瞎猜
         error_str = str(e)
         if "不支持" in error_str:
             parse_error_msg = error_str
@@ -1649,11 +2560,43 @@ def solve(problem_text: str) -> Solution:
     # Phase 2: 降级 — 关键词匹配
     try:
         return _keyword_fallback(problem_text)
+    except ValueError:
+        pass  # 无法匹配题型，进入 Phase 3
+    except Exception:
+        logger.exception("Keyword fallback crashed unexpectedly — falling through to LLM text-only")
+        pass  # 关键词匹配自身有 bug，降级到 Phase 3
+
+    # Phase 3: 降级 — LLM 纯文字解题（无 3D 模型）
+    try:
+        logger.info("Falling back to LLM text-only solving")
+        result = llm_parser.solve_text_only(problem_text)
+        steps = result.get("steps", [])
+        answer_latex = result.get("answer_latex", "")
+
+        return Solution(
+            problem=problem_text,
+            steps=steps,
+            answer_latex=answer_latex,
+            answer_value=0.0,
+            model=SolidModel(),
+            lesson_meta="AI 解题",
+            answer_label="答案",
+            three_points={},
+            spheres=[],
+            edges=[],
+            elements={},
+            target=[0, 0, 0],
+            initial_camera=[0, 0, 5],
+            scale=1.0,
+            text_only=True,
+        )
     except Exception as e:
-        # 如果 LLM 已经给出了明确的错误信息，优先用它
-        if parse_error_msg:
-            raise ValueError(parse_error_msg) from e
-        raise
+        logger.exception("LLM text-only solving failed")
+        # Always show the actual failure reason, not a stale Phase 1 parse error
+        raise ValueError(
+            f"AI 解题失败：{e}。"
+            f"请尝试更明确的题目描述，或输入「随机」尝试随机出题。"
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1752,5 +2695,77 @@ if __name__ == "__main__":
     ok_pd = abs(sol_pd.answer_value - expected_pd) < 1e-12
     print(f"  cos = {sol_pd.answer_latex} = {sol_pd.answer_value}  {'PASS' if ok_pd else 'FAIL'}")
     assert ok_pd, "pyramid dihedral angle mismatch"
+
+    # --- 三棱柱自检 ---
+    print("\n=== regular triangular prism: volume ===")
+    sol_pv2 = solve_prism_volume(2, 3)
+    # base area = 2²√3/4 = √3, V = 3√3
+    expected_pv2 = float(3 * sqrt(3))
+    ok_pv2 = abs(sol_pv2.answer_value - expected_pv2) < 1e-12
+    print(f"  V = {sol_pv2.answer_latex} = {sol_pv2.answer_value}  {'PASS' if ok_pv2 else 'FAIL'}")
+    assert ok_pv2, "prism volume mismatch"
+
+    print("\n=== regular triangular prism: line-plane angle ===")
+    sol_plp = solve_prism_line_plane_angle(2, 3)
+    # AB1 = (2, 0, 3), n = (0,0,1), sin = 3/√13
+    expected_plp = float(3 / sqrt(13))
+    ok_plp = abs(sol_plp.answer_value - expected_plp) < 1e-12
+    print(f"  sin = {sol_plp.answer_latex} = {sol_plp.answer_value}  {'PASS' if ok_plp else 'FAIL'}")
+    assert ok_plp, "prism line-plane angle mismatch"
+
+    print("\n=== regular triangular prism: point-plane distance ===")
+    sol_ppd = solve_prism_point_plane_distance(2, 3)
+    # distance from C1 to y=0 is C1's y coordinate = a√3/2 = √3
+    expected_ppd = float(sqrt(3))
+    ok_ppd = abs(sol_ppd.answer_value - expected_ppd) < 1e-12
+    print(f"  d = {sol_ppd.answer_latex} = {sol_ppd.answer_value}  {'PASS' if ok_ppd else 'FAIL'}")
+    assert ok_ppd, "prism point-plane distance mismatch"
+
+    # --- 长方体自检 ---
+    print("\n=== cuboid: volume ===")
+    sol_cuv = solve_cuboid_volume(3, 2, 2)
+    assert abs(sol_cuv.answer_value - 12) < 1e-12, "cuboid volume mismatch"
+    print(f"  V = {sol_cuv.answer_latex} = {sol_cuv.answer_value}  PASS")
+
+    print("\n=== cuboid: line-plane angle ===")
+    sol_culp = solve_cuboid_line_plane_angle(3, 2, 2)
+    assert sol_culp.answer_value > 0, "cuboid line-plane angle mismatch"
+    print(f"  sin = {sol_culp.answer_latex} = {sol_culp.answer_value}  PASS")
+
+    print("\n=== cuboid: line-line angle ===")
+    sol_cull = solve_cuboid_line_line_angle(3, 2, 2)
+    # cos = |ly²-lx²|/(lx²+ly²) = |4-9|/13 = 5/13
+    assert abs(sol_cull.answer_value - 5/13) < 1e-12, "cuboid line-line angle mismatch"
+    print(f"  cos = {sol_cull.answer_latex} = {sol_cull.answer_value}  PASS")
+
+    # --- 缺口补全自检 ---
+    print("\n=== tetrahedron: point-plane distance ===")
+    sol_tppd = solve_tetra_point_plane_distance(2)
+    expected_tppd = float(2 * sqrt(6) / 3)
+    assert abs(sol_tppd.answer_value - expected_tppd) < 1e-12, "tetra point-plane distance mismatch"
+    print(f"  d = {sol_tppd.answer_latex} = {sol_tppd.answer_value}  PASS")
+
+    print("\n=== pyramid: line-line angle ===")
+    sol_pll = solve_pyramid_line_line_angle(2, 1)
+    expected_pll = float(sqrt(3) / 3)
+    assert abs(sol_pll.answer_value - expected_pll) < 1e-12, "pyramid line-line angle mismatch"
+    print(f"  cos = {sol_pll.answer_latex} = {sol_pll.answer_value}  PASS")
+
+    print("\n=== pyramid: point-plane distance ===")
+    sol_ppd2 = solve_pyramid_point_plane_distance(2, 1)
+    expected_ppd2 = float(sqrt(2))
+    assert abs(sol_ppd2.answer_value - expected_ppd2) < 1e-12, "pyramid point-plane distance mismatch"
+    print(f"  d = {sol_ppd2.answer_latex} = {sol_ppd2.answer_value}  PASS")
+
+    print("\n=== prism: dihedral angle ===")
+    sol_pda = solve_prism_dihedral_angle(2, 3)
+    assert abs(sol_pda.answer_value - 0.5) < 1e-12, "prism dihedral angle mismatch"
+    print(f"  cos = {sol_pda.answer_latex} = {sol_pda.answer_value}  PASS")
+
+    print("\n=== prism: line-line angle ===")
+    sol_pll2 = solve_prism_line_line_angle(2, 3)
+    expected_pll2 = float(sqrt(13) / 13)
+    assert abs(sol_pll2.answer_value - expected_pll2) < 1e-12, "prism line-line angle mismatch"
+    print(f"  cos = {sol_pll2.answer_latex} = {sol_pll2.answer_value}  PASS")
 
     print("\n=== ALL SELF-TESTS PASSED ===")

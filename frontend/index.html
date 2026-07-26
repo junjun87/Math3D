@@ -99,21 +99,31 @@
         .home-scope {
             width: 100%; max-width: 420px; margin: 0 auto 8px;
             background: #fff; border-radius: var(--radius-lg);
-            border: 1px solid var(--g100); padding: 20px 20px 16px;
+            border: 1px solid var(--g100); padding: 16px 16px 12px;
             box-shadow: var(--shadow-sm);
         }
-        .scope-title { font-size: 14px; font-weight: 600; color: var(--g700); margin-bottom: 14px; }
-        .scope-group { margin-bottom: 14px; }
-        .scope-shape {
-            font-size: 13px; font-weight: 700; color: var(--p600);
-            margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
+        .scope-title { font-size: 14px; font-weight: 600; color: var(--g700); margin-bottom: 10px; }
+        /* ---- Accordion ---- */
+        .scope-accordion { margin-bottom: 6px; border: 1px solid var(--g100); border-radius: 10px; overflow: hidden; }
+        .scope-header {
+            display: flex; align-items: center; gap: 8px; padding: 9px 14px;
+            cursor: pointer; user-select: none; background: #fafbfc;
+            font-size: 13px; font-weight: 700; color: var(--g700);
+            transition: background 0.15s;
         }
-        .scope-shape::after {
-            content: ''; flex: 1; height: 1px; background: var(--g100);
+        .scope-header:hover { background: #eef2ff; }
+        .scope-header .arrow {
+            font-size: 10px; color: var(--g400); transition: transform 0.2s;
+            width: 16px; text-align: center; flex-shrink: 0;
         }
-        .scope-examples { display: flex; flex-direction: column; gap: 4px; }
+        .scope-accordion.open .scope-header .arrow { transform: rotate(90deg); }
+        .scope-header .count {
+            font-size: 11px; font-weight: 500; color: var(--g400); margin-left: auto;
+        }
+        .scope-body { display: none; padding: 4px 10px 10px; }
+        .scope-accordion.open .scope-body { display: block; }
         .scope-example {
-            display: flex; align-items: center; gap: 8px; padding: 5px 10px;
+            display: flex; align-items: center; gap: 8px; padding: 5px 8px;
             border-radius: 6px; cursor: pointer; transition: background 0.15s;
             font-size: 12px; color: var(--g600);
         }
@@ -128,7 +138,7 @@
         .ex-badge.dist { color: #7c3aed; background: #faf5ff; border: 1px solid #ddd6fe; }
         .ex-badge.vol  { color: #db2777; background: #fdf2f8; border: 1px solid #fbcfe8; }
         .ex-badge.range{ color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; }
-        .scope-note { font-size: 12px; color: var(--g400); margin-top: 8px; text-align: center; }
+        .scope-note { font-size: 12px; color: var(--g400); margin-top: 10px; text-align: center; }
         .scope-toast {
             position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
             background: #1e293b; color: #fff; font-size: 13px; padding: 8px 20px;
@@ -292,82 +302,65 @@
         </div>
     </div>
     <div class="home-scope">
-        <div class="scope-title">📐 支持题型一览（点击可试）</div>
+        <div class="scope-title">📐 支持题型（24 种 · 点击展开可试）</div>
 
-        <div class="scope-group">
-            <div class="scope-shape">🟦 正方体</div>
-            <div class="scope-examples">
-                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求直线 AC1 与平面 BDD1B1 所成角的正弦值。">
-                    <span class="ex-label">直线 AC₁ 与平面 BDD₁B₁ 的线面角</span>
-                    <span class="ex-badge sin">正弦值</span>
-                </div>
-                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求异面直线 A1C 与 AB 所成角的余弦值。">
-                    <span class="ex-label">异面直线 A₁C 与 AB 的夹角</span>
-                    <span class="ex-badge cos">余弦值</span>
-                </div>
-                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求点 A1 到平面 AB1C 的距离。">
-                    <span class="ex-label">点 A₁ 到平面 AB₁C 的距离</span>
-                    <span class="ex-badge dist">距离</span>
-                </div>
-                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，E,F 分别是棱 BC,CC1 的中点，P 是侧面 BCC1B1 内一点，若 A1P∥平面 AEF，求线段 A1P 长度的取值范围。">
-                    <span class="ex-label">动点 P 满足平行条件，求 |A₁P| 范围</span>
-                    <span class="ex-badge range">取值范围</span>
-                </div>
-                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求二面角 A-BD-C1 的余弦值。">
-                    <span class="ex-label">二面角 A-BD-C₁</span>
-                    <span class="ex-badge cos">余弦值</span>
-                </div>
-                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求该正方体的体积。">
-                    <span class="ex-label">正方体体积</span>
-                    <span class="ex-badge vol">体积</span>
-                </div>
+        <div class="scope-accordion">
+            <div class="scope-header">
+                <span class="arrow">▶</span> 🟦 正方体 / 长方体 <span class="count">6 种</span>
+            </div>
+            <div class="scope-body">
+                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求直线 AC1 与平面 BDD1B1 所成角的正弦值。"><span class="ex-label">AC₁ 与平面 BDD₁B₁ 线面角</span><span class="ex-badge sin">正弦</span></div>
+                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求异面直线 A1C 与 AB 所成角的余弦值。"><span class="ex-label">A₁C 与 AB 异面直线夹角</span><span class="ex-badge cos">余弦</span></div>
+                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求点 A1 到平面 AB1C 的距离。"><span class="ex-label">点 A₁ 到平面 AB₁C 距离</span><span class="ex-badge dist">距离</span></div>
+                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，E,F 分别是棱 BC,CC1 的中点，P 是侧面 BCC1B1 内一点，若 A1P∥平面 AEF，求线段 A1P 长度的取值范围。"><span class="ex-label">动点取值范围</span><span class="ex-badge range">范围</span></div>
+                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求二面角 A-BD-C1 的余弦值。"><span class="ex-label">二面角 A-BD-C₁</span><span class="ex-badge cos">余弦</span></div>
+                <div class="scope-example" data-example="长方体 ABCD-A1B1C1D1，AB=3，AD=2，AA1=2，求异面直线 A1C1 与 BD 所成角的余弦值。"><span class="ex-label">长方体 A₁C₁ 与 BD 异面</span><span class="ex-badge cos">余弦</span></div>
             </div>
         </div>
 
-        <div class="scope-group">
-            <div class="scope-shape">🔺 正四面体</div>
-            <div class="scope-examples">
-                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求该正四面体的体积。">
-                    <span class="ex-label">正四面体体积</span>
-                    <span class="ex-badge vol">体积</span>
-                </div>
-                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求异面直线 AB 与 CD 所成角的余弦值。">
-                    <span class="ex-label">对棱 AB 与 CD 的夹角</span>
-                    <span class="ex-badge cos">余弦值</span>
-                </div>
-                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求直线 AB 与平面 BCD 所成角的正弦值。">
-                    <span class="ex-label">棱 AB 与对面 BCD 的线面角</span>
-                    <span class="ex-badge sin">正弦值</span>
-                </div>
-                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求二面角 A-BC-D 的余弦值。">
-                    <span class="ex-label">二面角 A-BC-D</span>
-                    <span class="ex-badge cos">余弦值</span>
-                </div>
+        <div class="scope-accordion">
+            <div class="scope-header">
+                <span class="arrow">▶</span> 🔺 正四面体 <span class="count">5 种</span>
+            </div>
+            <div class="scope-body">
+                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求该正四面体的体积。"><span class="ex-label">体积</span><span class="ex-badge vol">体积</span></div>
+                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求直线 AB 与平面 BCD 所成角的正弦值。"><span class="ex-label">棱 AB 与对面 BCD 线面角</span><span class="ex-badge sin">正弦</span></div>
+                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求异面直线 AB 与 CD 所成角的余弦值。"><span class="ex-label">对棱 AB 与 CD 夹角</span><span class="ex-badge cos">余弦</span></div>
+                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求二面角 A-BC-D 的余弦值。"><span class="ex-label">二面角 A-BC-D</span><span class="ex-badge cos">余弦</span></div>
+                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求点 A 到平面 BCD 的距离。"><span class="ex-label">点 A 到平面 BCD 距离</span><span class="ex-badge dist">距离</span></div>
             </div>
         </div>
 
-        <div class="scope-group">
-            <div class="scope-shape">🔶 正四棱锥</div>
-            <div class="scope-examples">
-                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，E 为 PC 中点，求直线 BE 与平面 PAC 所成角的正弦值。">
-                    <span class="ex-label">中点 E，直线 BE 与平面 PAC 的线面角</span>
-                    <span class="ex-badge sin">正弦值</span>
-                </div>
-                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求侧面 PAB 与底面 ABCD 所成二面角的余弦值。">
-                    <span class="ex-label">侧面 PAB 与底面的二面角</span>
-                    <span class="ex-badge cos">余弦值</span>
-                </div>
-                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求该正四棱锥的体积。">
-                    <span class="ex-label">正四棱锥体积</span>
-                    <span class="ex-badge vol">体积</span>
-                </div>
+        <div class="scope-accordion">
+            <div class="scope-header">
+                <span class="arrow">▶</span> 🔶 正四棱锥 <span class="count">5 种</span>
+            </div>
+            <div class="scope-body">
+                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，E 为 PC 中点，求直线 BE 与平面 PAC 所成角的正弦值。"><span class="ex-label">BE 与平面 PAC 线面角</span><span class="ex-badge sin">正弦</span></div>
+                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求侧面 PAB 与底面 ABCD 所成二面角的余弦值。"><span class="ex-label">侧面 PAB 与底面二面角</span><span class="ex-badge cos">余弦</span></div>
+                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求异面直线 PC 与 AB 所成角的余弦值。"><span class="ex-label">PC 与 AB 异面直线</span><span class="ex-badge cos">余弦</span></div>
+                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求点 B 到平面 PAC 的距离。"><span class="ex-label">B 到平面 PAC 距离</span><span class="ex-badge dist">距离</span></div>
+                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求该正四棱锥的体积。"><span class="ex-label">体积</span><span class="ex-badge vol">体积</span></div>
             </div>
         </div>
 
-        <p class="scope-note">💡 也可输入「随机」试试随机出题 ✨</p>
+        <div class="scope-accordion">
+            <div class="scope-header">
+                <span class="arrow">▶</span> 🔷 正三棱柱 <span class="count">5 种</span>
+            </div>
+            <div class="scope-body">
+                <div class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求该正三棱柱的体积。"><span class="ex-label">体积</span><span class="ex-badge vol">体积</span></div>
+                <div class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求直线 AB1 与底面 ABC 所成角的正弦值。"><span class="ex-label">AB₁ 与底面 ABC 线面角</span><span class="ex-badge sin">正弦</span></div>
+                <div class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求侧面 ABB1A1 与 BCC1B1 所成二面角的余弦值。"><span class="ex-label">相邻侧面二面角</span><span class="ex-badge cos">余弦</span></div>
+                <div class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求异面直线 AC1 与 BC 所成角的余弦值。"><span class="ex-label">AC₁ 与 BC 异面直线</span><span class="ex-badge cos">余弦</span></div>
+                <div class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求点 C1 到侧面 ABB1A1 的距离。"><span class="ex-label">C₁ 到侧面 ABB₁A₁ 距离</span><span class="ex-badge dist">距离</span></div>
+            </div>
+        </div>
+
+        <p class="scope-note">💡 不限于以上题型 — 输入任意几何题，AI 会尝试解答 ✨</p>
     </div>
     <div id="scope-toast" class="scope-toast">📋 已填入输入框，点击提交即可</div>
-    <div class="home-footer">Math3D v0.4.0</div>
+    <div class="home-footer">Math3D v0.5.0</div>
 </div>
 
 <!-- ========== Camera / Album Capture ========== -->
@@ -471,15 +464,22 @@ document.querySelectorAll('[data-nav]').forEach(card => {
     });
 });
 
+// ===== Scope Accordion Toggle =====
+document.querySelectorAll('.scope-header').forEach(header => {
+    header.addEventListener('click', () => {
+        header.parentElement.classList.toggle('open');
+    });
+});
+
 // ===== Scope Example Clicks =====
 const $scopeToast = document.getElementById('scope-toast');
 let _scopeToastTimer = 0;
 document.querySelectorAll('.scope-example[data-example]').forEach(el => {
-    el.addEventListener('click', () => {
+    el.addEventListener('click', (e) => {
+        e.stopPropagation();
         document.getElementById('text-input').value = el.dataset.example;
         $textStatus.className = 'status-msg';
         navigate('text');
-        // Toast
         clearTimeout(_scopeToastTimer);
         $scopeToast.classList.add('show');
         _scopeToastTimer = setTimeout(() => $scopeToast.classList.remove('show'), 1800);

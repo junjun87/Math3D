@@ -33,10 +33,10 @@ python -m http.server 3000
   ├─ 📷 拍照 → POST /api/ocr {image} ──► llm_parser.ocr_image()
   │      ├─► 阿里云 RecognizeEduQuestionOcr（题目识别，按次计费）
   │      ├─► RecognizeAdvanced 降级（通用文字识别）
-  │      └─► DeepSeek LLM 规范化（修复数学符号 + 过滤图形标注）
+  │      └─► DeepSeek LLM 规范化（修复数学符号 + 过滤图形标注；OCR_LLM_NORMALIZE=0 可跳过）
   │
   └─ 题面文字 ──► POST /api/solve {problem: "…"} ──► backend/app.py
-        │                                 ├─► llm_parser.py (LLM 题面解析，可选)
+        │                                 ├─► llm_parser.py (LLM 题面解析 → 关键词匹配 → LLM 纯文字，三层降级)
         │                                 ├─► solver_registry.py (题型路由)
         │                                 └─► geometry_kernel.py (sympy 精确计算)
         │                                       ├─► bodies.py (几何体拓扑)
@@ -51,7 +51,7 @@ python -m http.server 3000
 ### 后端 (`backend/`)
 
 - **`app.py`** — FastAPI 服务。`/api/solve` 接收题面，调用 `geometry_kernel.solve()` 返回解题 HTML。`/api/ocr` 接收图片，调用视觉 LLM 提取题目文字。`/api/health` 健康检查。生产模式下通过 `StaticFiles` 挂载 `frontend/` 实现同源部署。CORS 完全放开。
-- **`geometry_kernel.py`** — 计算核心。数据类：`Point`、`Segment`、`SolidModel`、`Solution`。使用 sympy 精确有理数/根式运算（`.answer_value` 前绝不浮点）。`solve()` 优先调用 `llm_parser` 做结构化题面解析，失败降级为关键词匹配。内置 5 种题型求解器（通过 `@register_solver` 注册）。
+- **`geometry_kernel.py`** — 计算核心。数据类：`Point`、`Segment`、`SolidModel`、`Solution`。使用 sympy 精确有理数/根式运算（`.answer_value` 前绝不浮点）。`solve()` 优先调用 `llm_parser` 做结构化题面解析，失败降级为关键词匹配，再不匹配降级为 LLM 纯文字解题。内置 24 种题型求解器（通过 `@register_solver` 注册），覆盖正方体/长方体/正四面体/正四棱锥/正三棱柱 × 线面角/二面角/异面直线/点面距离/体积/动点。
 - **`solver_registry.py`** — `@register_solver(shape, query)` 装饰器将求解函数注册到全局映射表，供 LLM prompt 动态生成和题面路由。
 - **`llm_parser.py`** — 三个功能：(1) `ocr_image()` 优先阿里云文字识别 OCR（教育场景题目识别 + 通用文字识别降级），然后 DeepSeek LLM 规范化数学符号并过滤图形标注；(2) `parse_problem()` 通过 OpenAI 兼容 API 将题面解析为结构化 spec；(3) 不可用时静默降级为关键词匹配。配置：`ALIBABA_CLOUD_ACCESS_KEY_ID` / `ALIBABA_CLOUD_ACCESS_KEY_SECRET`（阿里云 OCR）+ `LLM_API_KEY` / `LLM_BASE_URL` / `LLM_MODEL`（题面解析 + OCR 规范化）。
 - **`bodies.py`** — 几何体拓扑库（`cuboid`、`quad_pyramid`、`tri_pyramid`、`prism`）。返回 `{spheres, edges}` 供 3D 渲染。与 `geometry_kernel.py` 的坐标计算分离。

@@ -77,8 +77,10 @@ def _build_system_prompt() -> str:
 
     type_descriptions = {
         "cube": "正方体",
+        "cuboid": "长方体",
         "regular_tetrahedron": "正四面体",
         "regular_quad_pyramid": "正四棱锥",
+        "regular_triangular_prism": "正三棱柱",
     }
     query_descriptions = {
         "line_plane_angle": "线面角（直线与平面所成角的正弦值）",
@@ -178,7 +180,16 @@ def _build_system_prompt() -> str:
 输出：{{"shape_type": "regular_quad_pyramid", "query_type": "dihedral_angle", "parameters": {{"base_edge": 2, "height": 1}}}}
 
 用户：正四棱锥底面边长2高1，求该正四棱锥的体积。
-输出：{{"shape_type": "regular_quad_pyramid", "query_type": "volume", "parameters": {{"base_edge": 2, "height": 1}}}}"""
+输出：{{"shape_type": "regular_quad_pyramid", "query_type": "volume", "parameters": {{"base_edge": 2, "height": 1}}}}
+
+用户：正三棱柱ABC-A1B1C1底面边长2高3，求该正三棱柱的体积。
+输出：{{"shape_type": "regular_triangular_prism", "query_type": "volume", "parameters": {{"base_edge": 2, "height": 3}}}}
+
+用户：正三棱柱底面等边三角形边长2高3，求直线AB1与底面ABC所成角的正弦值。
+输出：{{"shape_type": "regular_triangular_prism", "query_type": "line_plane_angle", "parameters": {{"base_edge": 2, "height": 3}}}}
+
+用户：正三棱柱底面边长2高3，求点C1到侧面ABB1A1的距离。
+输出：{{"shape_type": "regular_triangular_prism", "query_type": "point_plane_distance", "parameters": {{"base_edge": 2, "height": 3}}}}"""
 
 
 # ---------------------------------------------------------------------------
@@ -217,8 +228,11 @@ def _call_llm(system_prompt: str, user_message: str, config: LLMConfig,
         ],
         "temperature": 0.1,
         "max_tokens": max_tokens,
-        "thinking": {"type": "disabled"},  # v4-flash/pro 关闭思考模式，2-3s 响应
     }
+    # DeepSeek 思考模式会增加响应时间，OCR/解析场景必须关闭；
+    # 只对 DeepSeek 模型注入该参数，避免其他 OpenAI 兼容服务 400。
+    if "deepseek" in config.model.lower() or "deepseek" in config.base_url.lower():
+        payload["thinking"] = {"type": "disabled"}
     if use_json:
         payload["response_format"] = {"type": "json_object"}
 
@@ -576,6 +590,101 @@ OCR 可能丢失 △：
 
 
 # ---------------------------------------------------------------------------
+# LLM 纯文字解题（不匹配已注册题型时的降级方案）
+# ---------------------------------------------------------------------------
+
+def solve_text_only(problem_text: str) -> dict:
+    """
+    对无法匹配已注册题型的题目，调用 LLM 给出纯文字逐步解答。
+
+    返回:
+        {"steps": [...], "answer_latex": str}
+
+    异常:
+        LLMNotConfiguredError — API key 未配置
+        LLMParseError — LLM 返回不可解析
+    """
+    config = LLMConfig.from_env()
+    if not config.is_configured:
+        raise LLMNotConfiguredError("LLM not configured for text-only solving")
+
+    supported = list_supported_types()
+    supported_str = "\n".join(
+        f"- {s} + {q}" for s, qs in supported.items() for q in qs
+    )
+
+    prompt = f"""你是一个立体几何解题专家。请对以下题目给出详细的逐步解答。
+
+## 已注册题型参考（本题不属于以下任一，请自由发挥）
+
+{supported_str}
+
+## 输出格式
+
+严格输出以下 JSON（不要包含 markdown 代码块标记）：
+
+{{
+  "answer_latex": "最终答案的 LaTeX 表达式（纯 LaTeX，不含 $ 符号）",
+  "steps": [
+    {{"title": "步骤标题", "content": "步骤内容。可使用 <p> 段落、$...$ 行内公式、$$...$$ 独立公式。"}}
+  ]
+}}
+
+## 要求
+- 每个步骤的 content 为 HTML，数学公式用 $...$（行内）或 $$...$$（独立行）
+- 解答要完整、准确，展示关键推理过程和中间结果
+- 最终答案放在 answer_latex 中，使用纯 LaTeX 格式（如 \\frac{{a}}{{b}}、\\sqrt{{2}}）
+- 如果题目信息不完整，在第一步指出并给出合理假设
+- 如果题目不属于立体几何，返回 error 字段
+
+## 示例
+
+题目：正方体棱长为1，求其外接球的表面积。
+输出：
+{{
+  "answer_latex": "3\\pi",
+  "steps": [
+    {{"title": "分析题意", "content": "<p>正方体棱长 $a=1$，外接球直径等于体对角线。</p>"}},
+    {{"title": "计算体对角线", "content": "<p>体对角线 $d = \\sqrt{{a^2 + a^2 + a^2}} = \\sqrt{{3}}a = \\sqrt{{3}}$</p>"}},
+    {{"title": "计算外接球表面积", "content": "<p>球半径 $R = d/2 = \\sqrt{{3}}/2$</p><p>表面积 $S = 4\\pi R^2 = 4\\pi \\cdot \\frac{{3}}{{4}} = 3\\pi$</p>"}}
+  ]
+}}"""
+
+    # Use plain text mode — JSON mode can truncate long structured responses
+    try:
+        content = _call_llm(prompt, problem_text, config, use_json=False, max_tokens=4096)
+    except Exception as e:
+        logger.warning("LLM text-only call failed: %s", e)
+        raise LLMParseError(f"LLM API 调用失败: {e}")
+
+    # Parse the response — try to extract JSON from possible markdown wrapping
+    import json as _json_mod
+    text = content.strip()
+    if text.startswith(_JSON_MARKER_START):
+        text = text[len(_JSON_MARKER_START):]
+        if text.endswith(_JSON_MARKER_END):
+            text = text[:-len(_JSON_MARKER_END)]
+        text = text.strip()
+
+    try:
+        result = _json_mod.loads(text)
+    except _json_mod.JSONDecodeError as e:
+        logger.warning("LLM text-only JSON parse failed. Raw: %s", content[:500])
+        raise LLMParseError(f"LLM 返回内容无法解析为 JSON: {e}")
+
+    if not isinstance(result, dict):
+        raise LLMParseError(f"Expected JSON object, got {type(result).__name__}")
+
+    if "error" in result:
+        raise LLMParseError(result["error"])
+
+    if "steps" not in result:
+        raise LLMParseError("LLM response missing 'steps' field")
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # 公共 API
 # ---------------------------------------------------------------------------
 
@@ -635,7 +744,7 @@ def ocr_image(image_base64: str, media_type: str = "image/jpeg") -> str:
 
     # 轻量正则规范化
     text = _normalize_ocr_text(text)
-    # LLM 清洗：修复数学符号 + 过滤图形标注文字
-    if text:
+    # LLM 清洗：修复数学符号 + 过滤图形标注文字（可通过 OCR_LLM_NORMALIZE=0 关闭以节省费用）
+    if text and os.getenv("OCR_LLM_NORMALIZE", "1") not in ("0", "false", "no", "off"):
         text = _normalize_with_llm(text)
     return text

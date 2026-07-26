@@ -227,10 +227,23 @@
         .readout-row { display: flex; justify-content: space-between; gap: 16px; padding: 3px 0; }
         .readout-row b { color: var(--text); font-variant-numeric: tabular-nums; }
 
+        /* ---- Text-only mode (no 3D model) ---- */
+        body.text-only #canvas-container {
+            display: flex; align-items: center; justify-content: center;
+            min-width: 0; flex: 0 0 280px;
+        }
+        body.text-only #canvas-container .text-only-msg {
+            text-align: center; color: #94a3b8; padding: 24px;
+        }
+        body.text-only #canvas-container .text-only-msg .icon { font-size: 48px; margin-bottom: 12px; }
+        body.text-only #canvas-container .text-only-msg p { font-size: 14px; margin: 0; line-height: 1.6; }
+        body.text-only #sidebar { flex: 0 0 520px; }
         @media (max-width: 640px) {
             body { flex-direction: column-reverse; gap: 8px; padding: 8px; }
             #sidebar { width: 100%; flex: 0 0 52vh; border-radius: 20px; box-shadow: var(--panel-shadow); }
             #canvas-container { flex: 1 1 auto; height: auto; border-radius: 20px; }
+            body.text-only #canvas-container { flex: 0 0 auto; height: 120px; }
+            body.text-only #sidebar { flex: 1 1 auto; }
             .content-wrapper { gap: 10px; padding: 10px; }
             .lesson-header { gap: 10px; }
             .content-card { padding: 12px; border-radius: 12px; }
@@ -672,6 +685,29 @@
         // ---- Init ----
         function init() {
             const container = document.getElementById('canvas-container');
+
+            // Text-only mode: no 3D model, show placeholder message
+            if (DATA.textOnly) {
+                document.body.classList.add('text-only');
+                // Move download button to sidebar nav bar before clearing canvas
+                const dlBtn = document.getElementById('download-btn');
+                if (dlBtn) {
+                    dlBtn.style.position = 'static';
+                    dlBtn.style.marginTop = '8px';
+                    document.getElementById('prev-btn').parentNode.appendChild(dlBtn);
+                }
+                container.innerHTML = `
+                    <div class="text-only-msg">
+                        <div class="icon">📝</div>
+                        <p>本题由 AI 纯文字解答</p>
+                        <p style="font-size:12px;color:#cbd5e1;">不涉及 3D 交互模型</p>
+                    </div>`;
+                initializeLessonText();
+                enableDragScroll(document.getElementById('step-container'));
+                if (steps.length > 0) goToStep(0);
+                typesetMath(document.getElementById('sidebar'));
+                return;
+            }
 
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0xf8fafc);

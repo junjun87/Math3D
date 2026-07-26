@@ -120,6 +120,20 @@ def main():
         "tetra_dihedral": gk.solve_tetra_dihedral_angle,
         "pyramid_volume": gk.solve_pyramid_volume,
         "pyramid_dihedral": gk.solve_pyramid_dihedral_angle,
+        # --- 三棱柱 ---
+        "prism_volume": gk.solve_prism_volume,
+        "prism_line_plane": gk.solve_prism_line_plane_angle,
+        "prism_distance": gk.solve_prism_point_plane_distance,
+        "prism_dihedral": gk.solve_prism_dihedral_angle,
+        "prism_skew": gk.solve_prism_line_line_angle,
+        # --- 长方体 ---
+        "cuboid_volume": gk.solve_cuboid_volume,
+        "cuboid_line_plane": gk.solve_cuboid_line_plane_angle,
+        "cuboid_skew": gk.solve_cuboid_line_line_angle,
+        # --- 缺口补全 ---
+        "tetra_distance": gk.solve_tetra_point_plane_distance,
+        "pyramid_skew": gk.solve_pyramid_line_line_angle,
+        "pyramid_distance": gk.solve_pyramid_point_plane_distance,
     }
 
     if cmd == "random":
