@@ -2,8 +2,25 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>立体几何交互教学</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>立体几何交互解题 — Math3D</title>
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Math3D 解题详情 — AI 解析步骤与可交互 3D 立体几何课件。">
+    <meta property="og:title" content="立体几何交互解题 — Math3D">
+    <meta property="og:description" content="AI 解析步骤与可交互 3D 立体几何课件">
+    <meta property="og:type" content="article">
+    <meta property="og:image" content="/icons/icon-512.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="preconnect" href="https://registry.npmmirror.com" crossorigin>
+    <link rel="dns-prefetch" href="https://unpkg.com">
+    <link rel="dns-prefetch" href="https://registry.npmmirror.com">
+    <script src="/config.js"></script>
     <style>
         :root {
             --primary: #0ea5e9;
@@ -19,7 +36,7 @@
             --shadow-soft: 0 8px 30px rgba(15, 23, 42, 0.08);
             --panel-shadow: 0 8px 30px rgba(15, 23, 42, 0.08);
         }
-        * { box-sizing: border-box; }
+        *, *::before, *::after { box-sizing: border-box; }
         html, body {
             margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
         }
@@ -29,7 +46,6 @@
             display: flex; gap: 10px; padding: 10px;
         }
         button { font: inherit; }
-
         .skip-link {
             position: fixed; left: 16px; top: 16px; z-index: 999;
             padding: 10px 14px; border-radius: 8px; background: var(--text);
@@ -37,6 +53,44 @@
             transform: translateY(-140%); transition: transform 0.2s ease;
         }
         .skip-link:focus { transform: translateY(0); outline: 3px solid var(--ring); }
+
+        /* Back to home button */
+        .btn-back-home {
+            position: fixed; left: 16px; top: 16px; z-index: 998;
+            display: flex; align-items: center; gap: 6px;
+            padding: 8px 14px; border-radius: 999px;
+            background: rgba(255,255,255,0.92); border: 1px solid var(--border);
+            color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06); font-family: inherit;
+            text-decoration: none; transition: background 0.2s, color 0.2s;
+        }
+        .btn-back-home:hover { background: var(--surface); color: var(--text); }
+        .btn-back-home svg { width: 14px; height: 14px; }
+        @media (max-width: 640px) {
+            .btn-back-home { top: auto; bottom: 20px; left: 20px; z-index: 103; }
+        }
+
+        /* Loading / Error states */
+        #loading-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: #f8fafc; gap: 16px;
+        }
+        #loading-overlay .spinner {
+            width: 40px; height: 40px; border: 4px solid #e2e8f0;
+            border-top-color: var(--primary-dark); border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #loading-overlay p { color: var(--muted); font-size: 14px; }
+        #error-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            background: #f8fafc; gap: 16px;
+        }
+        #error-overlay .icon { font-size: 64px; }
+        #error-overlay p { color: var(--muted); font-size: 14px; text-align: center; max-width: 320px; line-height: 1.6; }
+        #error-overlay a { color: var(--primary-dark); font-weight: 600; }
 
         #sidebar {
             width: 420px; background: var(--surface);
@@ -156,7 +210,7 @@
         }
         .btn {
             padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer;
-            transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+            transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.2s;
             border: none; font-size: 14px;
         }
         .btn-prev { background: #f1f5f9; color: #64748b; }
@@ -189,7 +243,7 @@
             background: rgba(255,255,255,0.92); color: var(--muted);
             font-size: 13px; font-weight: 700; cursor: pointer;
             box-shadow: 0 4px 20px rgba(15,23,42,0.08);
-            transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+            transition: background 0.2s, color 0.2s, box-shadow 0.2s;
         }
         #measure-toggle.is-on { background: var(--primary-dark); color: #fff; border-color: var(--primary-dark); }
         #measure-toggle:hover { box-shadow: 0 6px 22px rgba(15,23,42,0.14); }
@@ -227,7 +281,7 @@
         .readout-row { display: flex; justify-content: space-between; gap: 16px; padding: 3px 0; }
         .readout-row b { color: var(--text); font-variant-numeric: tabular-nums; }
 
-        /* ---- Text-only mode (no 3D model) ---- */
+        /* Text-only mode */
         body.text-only #canvas-container {
             display: flex; align-items: center; justify-content: center;
             min-width: 0; flex: 0 0 280px;
@@ -238,10 +292,22 @@
         body.text-only #canvas-container .text-only-msg .icon { font-size: 48px; margin-bottom: 12px; }
         body.text-only #canvas-container .text-only-msg p { font-size: 14px; margin: 0; line-height: 1.6; }
         body.text-only #sidebar { flex: 0 0 520px; }
+
+        /* Fullscreen 3D toggle (mobile) */
+        .btn-fs3d {
+            display: none; position: absolute; left: 50%; bottom: 20px; z-index: 102;
+            transform: translateX(-50%); padding: 8px 16px; border-radius: 999px;
+            background: rgba(255,255,255,0.92); border: 1px solid var(--border);
+            font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08); font-family: inherit;
+        }
         @media (max-width: 640px) {
+            .btn-fs3d { display: block; }
             body { flex-direction: column-reverse; gap: 8px; padding: 8px; }
             #sidebar { width: 100%; flex: 0 0 52vh; border-radius: 20px; box-shadow: var(--panel-shadow); }
             #canvas-container { flex: 1 1 auto; height: auto; border-radius: 20px; }
+            body.sidebar-hidden #sidebar { display: none; }
+            body.sidebar-hidden #canvas-container { flex: 1 1 100%; }
             body.text-only #canvas-container { flex: 0 0 auto; height: 120px; }
             body.text-only #sidebar { flex: 1 1 auto; }
             .content-wrapper { gap: 10px; padding: 10px; }
@@ -263,7 +329,6 @@
             #measure-toggle { left: 14px; top: 14px; font-size: 12px; padding: 6px 11px; }
             .readout-panel { left: 14px; bottom: 14px; font-size: 12px; min-width: 150px; }
         }
-
         @media (prefers-reduced-motion: reduce) {
             *, *::before, *::after {
                 scroll-behavior: auto !important;
@@ -292,10 +357,83 @@
     </script>
     <script id="MathJax-script" async src="https://registry.npmmirror.com/mathjax/3.2.2/files/es5/tex-mml-chtml.js"></script>
 
-    <script id="lesson-data" type="application/json">__LESSON_DATA__</script>
+    <script id="lesson-data" type="application/json"></script>
+
+    <!-- Data loader: reads ?id= from URL, tries sessionStorage first, then API -->
+    <script>
+    (async function loadLessonData() {
+        var id = new URLSearchParams(window.location.search).get('id');
+        if (!id) {
+            showError('缺少解题 ID', '请从题目页面重新提交。');
+            return;
+        }
+
+        // 1. Try sessionStorage (instant — set by solve.js before navigation)
+        var cacheKey = 'math3d_sol_' + id;
+        var cached = sessionStorage.getItem(cacheKey);
+        var lessonData = null;
+
+        if (cached) {
+            try { lessonData = JSON.parse(cached); } catch(e) {}
+        }
+
+        // 2. Fallback: fetch from API
+        if (!lessonData) {
+            try {
+                var base = (window.API_BASE_URL || '').replace(/\/$/, '');
+                var resp = await fetch(base + '/api/solution/' + id);
+                if (resp.ok) {
+                    var data = await resp.json();
+                    if (data.success && data.lesson) {
+                        lessonData = data.lesson;
+                        // Cache for refresh
+                        sessionStorage.setItem(cacheKey, JSON.stringify(lessonData));
+                    }
+                }
+            } catch(e) {}
+        }
+
+        if (!lessonData) {
+            showError('解题数据已过期', '请返回题目页面重新提交求解。');
+            return;
+        }
+
+        // Inject data and hide loading overlay
+        document.getElementById('lesson-data').textContent = JSON.stringify(lessonData);
+        document.getElementById('loading-overlay').style.display = 'none';
+        // Trigger the main 3D renderer (below)
+        initSolution();
+    })();
+
+    function showError(title, message) {
+        document.getElementById('loading-overlay').style.display = 'none';
+        var err = document.getElementById('error-overlay');
+        err.style.display = 'flex';
+        err.querySelector('strong').textContent = title;
+        err.querySelector('p').textContent = message;
+    }
+    </script>
+
+    <!-- Loading overlay -->
+    <div id="loading-overlay">
+        <div class="spinner"></div>
+        <p>正在加载解题数据…</p>
+    </div>
+
+    <!-- Error overlay -->
+    <div id="error-overlay">
+        <div class="icon">⏳</div>
+        <strong style="font-size:18px;color:var(--text)">解题数据已过期</strong>
+        <p>请返回题目页面重新提交求解。</p>
+    </div>
+
 </head>
 <body>
     <a class="skip-link" id="skip-link" href="#step-container">跳到解题步骤</a>
+    <a class="btn-back-home" href="/" title="返回首页">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        返回
+    </a>
 
     <aside id="sidebar" aria-label="立体几何解题步骤面板">
         <div class="content-wrapper">
@@ -336,13 +474,15 @@
                 下载 HTML
             </button>
         </div>
+        <button class="btn-fs3d" id="btn-fs3d" type="button">🔍 全屏 3D</button>
     </div>
 
     <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+    // This script runs AFTER lesson data is loaded by the inline loader above.
+    // initSolution() is called by the loader when data is ready.
+    // Three.js modules are loaded dynamically — skipped for text-only solutions.
 
+    window.initSolution = function() {
         const DATA = JSON.parse(document.getElementById('lesson-data').textContent);
         const lesson = DATA.lesson;
         const steps = DATA.steps;
@@ -390,7 +530,6 @@
         const cameraTargetPoint = new THREE.Vector3(...(model.target || [0, 0.45, 0]));
         let targetCameraPosition = null;
 
-        // ---- UI text init ----
         function initializeLessonText() {
             document.documentElement.lang = lesson.language || 'zh-CN';
             document.title = ui.pageTitle || lesson.title;
@@ -404,13 +543,15 @@
             document.getElementById('prev-btn').textContent = ui.previous;
             document.getElementById('lesson-meta').textContent = lesson.meta || '';
             document.getElementById('lesson-title').textContent = lesson.title;
+            if (lesson.title) {
+                document.title = lesson.title + ' — Math3D';
+            }
             document.getElementById('answer-summary').textContent = lesson.answerLabel || '';
             const av = document.getElementById('answer-value');
             av.innerHTML = lesson.answerValue || '';
             typesetMath(av);
         }
 
-        // ---- Math helpers ----
         function markScrollableMath(root) {
             const blocks = root.querySelectorAll('.step-content mjx-container[display="true"]');
             blocks.forEach(el => {
@@ -472,7 +613,6 @@
             }, true);
         }
 
-        // ---- Geometry builders ----
         function v3(arr) { return new THREE.Vector3(arr[0], arr[1], arr[2]); }
         function pt(nameOrCoords) { return Array.isArray(nameOrCoords) ? v3(nameOrCoords) : POINTS[nameOrCoords].clone(); }
 
@@ -550,7 +690,6 @@
             return obj;
         }
 
-        // ---- Build model ----
         function buildModel() {
             for (const [name, coords] of Object.entries(model.points)) POINTS[name] = v3(coords);
 
@@ -583,7 +722,6 @@
             }
         }
 
-        // ---- Measure toggle ----
         function buildMeasureToggle() {
             const elements = model.elements || {};
             const hasMeasure = Object.values(elements).some(el => el.type === 'measure');
@@ -600,7 +738,6 @@
             document.getElementById('canvas-container').appendChild(btn);
         }
 
-        // ---- Step navigation ----
         function updateSceneState() {
             const stepData = steps[currentStep];
             for (const key of Object.keys(model.elements || {})) {
@@ -628,7 +765,7 @@
                 .replace('{current}', currentStep + 1).replace('{total}', steps.length);
 
             const container = document.getElementById('step-container');
-            container.innerHTML = `<div class="step-title">${stepData.title}</div><div class="step-content">${stepData.content}</div>`;
+            container.innerHTML = '<div class="step-title">' + stepData.title + '</div><div class="step-content">' + stepData.content + '</div>';
             container.scrollTop = 0;
             typesetMath(document.getElementById('sidebar'));
 
@@ -651,7 +788,6 @@
             updateSceneState();
         }
 
-        // ---- Auto-fit camera to model ----
         function fitCameraToModel() {
             const allPoints = Object.values(POINTS);
             if (allPoints.length === 0) return;
@@ -663,45 +799,45 @@
             box.getSize(size);
             const maxDim = Math.max(size.x, size.y, size.z);
 
-            // Use model.target as look-at center, fallback to bounding box center
             const target = model.target ? v3(model.target) : center;
             controls.target.copy(target);
 
-            // Direction from initialCamera hint, or default isometric view
             const ic = model.initialCamera || [5, 4, 6];
             const dir = new THREE.Vector3(ic[0], ic[1], ic[2]).sub(target);
             if (dir.length() < 0.01) dir.set(3, 2, 4);
             dir.normalize();
 
-            // Fit model height in viewport: visible height at distance d = 2*d*tan(fov/2)
             const fovRad = camera.fov * Math.PI / 180;
             const distance = Math.max((maxDim * 1.4) / (2 * Math.tan(fovRad / 2)), 5);
 
             camera.position.copy(target.clone().add(dir.multiplyScalar(distance)));
-            // Adaptive fog: starts at 2× camera distance, ends at 6×
             scene.fog = new THREE.Fog(0xf8fafc, distance * 2, distance * 6);
         }
 
-        // ---- Init ----
-        function init() {
+        async function init() {
+            // Dynamic imports — skipped when text-only (init() never called)
+            const [THREE, { OrbitControls }, { CSS2DRenderer, CSS2DObject }] = await Promise.all([
+                import('three'),
+                import('three/addons/controls/OrbitControls.js'),
+                import('three/addons/renderers/CSS2DRenderer.js')
+            ]);
+
             const container = document.getElementById('canvas-container');
 
-            // Text-only mode: no 3D model, show placeholder message
             if (DATA.textOnly) {
                 document.body.classList.add('text-only');
-                // Move download button to sidebar nav bar before clearing canvas
                 const dlBtn = document.getElementById('download-btn');
                 if (dlBtn) {
                     dlBtn.style.position = 'static';
                     dlBtn.style.marginTop = '8px';
                     document.getElementById('prev-btn').parentNode.appendChild(dlBtn);
                 }
-                container.innerHTML = `
-                    <div class="text-only-msg">
-                        <div class="icon">📝</div>
-                        <p>本题由 AI 纯文字解答</p>
-                        <p style="font-size:12px;color:#cbd5e1;">不涉及 3D 交互模型</p>
-                    </div>`;
+                container.innerHTML =
+                    '<div class="text-only-msg">' +
+                        '<div class="icon">📝</div>' +
+                        '<p>本题由 AI 纯文字解答</p>' +
+                        '<p style="font-size:12px;color:#cbd5e1;">不涉及 3D 交互模型</p>' +
+                    '</div>';
                 initializeLessonText();
                 enableDragScroll(document.getElementById('step-container'));
                 if (steps.length > 0) goToStep(0);
@@ -757,6 +893,28 @@
             labelRenderer.render(scene, camera);
             typesetMath(document.getElementById('canvas-container'));
             buildMeasureToggle();
+
+            // Fullscreen 3D toggle (mobile) — use ResizeObserver for reliable layout-aware resize
+            const fsBtn = document.getElementById('btn-fs3d');
+            let fsActive = false;
+            const resizeRenderer = () => {
+                camera.aspect = container.clientWidth / container.clientHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(container.clientWidth, container.clientHeight);
+                labelRenderer.setSize(container.clientWidth, container.clientHeight);
+            };
+            // Observe container size changes (fires after CSS layout completes)
+            if (window.ResizeObserver) {
+                new ResizeObserver(() => resizeRenderer()).observe(container);
+            }
+            fsBtn.addEventListener('click', () => {
+                fsActive = !fsActive;
+                document.body.classList.toggle('sidebar-hidden', fsActive);
+                fsBtn.textContent = fsActive ? '📋 查看步骤' : '🔍 全屏 3D';
+                // ResizeObserver handles this; also fire once after a rAF double-frame as fallback
+                requestAnimationFrame(() => requestAnimationFrame(resizeRenderer));
+            });
+
             animate();
         }
 
@@ -783,6 +941,8 @@
             if (currentStep < steps.length - 1) goToStep(currentStep + 1);
         });
         document.getElementById('download-btn').addEventListener('click', () => {
+            // Download full HTML snapshot (DOM-based, no canvas buffer needed)
+            renderer.render(scene, camera);  // ensure latest frame
             const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
             const blob = new Blob([html], { type: 'text/html' });
             const a = document.createElement('a');
@@ -793,7 +953,8 @@
             document.body.removeChild(a);
         });
 
-        init();
+        init().catch(err => console.error('3D init failed:', err));
+    };
     </script>
 </body>
 </html>

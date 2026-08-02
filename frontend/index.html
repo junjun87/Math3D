@@ -2,365 +2,186 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Math3D — 立体几何交互解题</title>
-    <style>
-        /* ===== Design Tokens ===== */
-        :root {
-            /* Primary — blue */
-            --p50: #eff6ff;  --p100: #dbeafe; --p200: #bfdbfe; --p300: #93c5fd;
-            --p400: #60a5fa; --p500: #3b82f6; --p600: #2563eb; --p700: #1d4ed8;
-            --p800: #1e40af; --p900: #1e3a8a;
-            /* Gray */
-            --g50: #f9fafb;  --g100: #f3f4f6; --g200: #e5e7eb; --g300: #d1d5db;
-            --g400: #9ca3af; --g500: #6b7280; --g600: #4b5563; --g700: #374151;
-            --g800: #1f2937; --g900: #111827;
-            /* Semantic */
-            --red50: #fef2f2; --red: #ef4444; --red700: #b91c1c;
-            --green50: #f0fdf4; --green: #22c55e; --green700: #15803d;
-            --amber50: #fffbeb; --amber: #f59e0b; --amber700: #b45309;
-            /* Shadows */
-            --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-            --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-            --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
-            --shadow-lg: 0 8px 24px rgba(0,0,0,0.07), 0 2px 6px rgba(0,0,0,0.04);
-            --shadow-primary: 0 4px 14px rgba(59,130,246,0.25);
-            /* Radii */
-            --radius-sm: 10px;
-            --radius: 12px;
-            --radius-lg: 16px;
-            --radius-xl: 20px;
-            --radius-full: 999px;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        html, body { height: 100%; -webkit-tap-highlight-color: transparent; }
-        body {
-            font-family: 'Inter', -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
-            background: linear-gradient(180deg, var(--p50) 0%, #fff 60%);
-            color: var(--g900); min-height: 100vh;
-            -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
-        }
-        .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
-
-        /* ---- Pages ---- */
-        .page { display: none; min-height: 100vh; flex-direction: column; }
-        .page.active { display: flex; animation: fadeIn 0.25s ease; }
-
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-
-        /* ---- Header ---- */
-        .nav-header {
-            display: flex; align-items: center; gap: 12px;
-            padding: 12px 16px; background: rgba(255,255,255,0.92);
-            backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-            border-bottom: 1px solid var(--g200);
-            position: sticky; top: 0; z-index: 10;
-        }
-        .nav-header h1 { font-size: 17px; font-weight: 600; flex: 1; text-align: center; color: var(--g900); }
-        .nav-back {
-            color: var(--g500); font-size: 15px; font-weight: 500;
-            background: none; border: none; cursor: pointer;
-            padding: 6px 10px; border-radius: var(--radius); transition: all 0.15s ease;
-        }
-        .nav-back:hover { background: var(--g100); color: var(--g700); }
-        .nav-spacer { width: 28px; }
-
-        /* ---- Home ---- */
-        .home-header { text-align: center; padding: 48px 16px 24px; }
-        .home-header h1 {
-            font-size: 34px; font-weight: 700; color: var(--p700);
-            letter-spacing: -0.5px; line-height: 1.2;
-        }
-        .home-header p { color: var(--g500); font-size: 14px; margin-top: 8px; font-weight: 400; }
-        .home-cards { display: flex; flex-direction: column; gap: 12px; padding: 0 20px 24px; align-items: center; }
-        .entry-card {
-            width: 100%; max-width: 380px; display: flex; align-items: center; gap: 16px;
-            background: #fff; border-radius: var(--radius-lg); padding: 18px 22px;
-            box-shadow: var(--shadow); border: 1px solid var(--g100);
-            cursor: pointer; transition: all 0.18s ease; user-select: none;
-        }
-        .entry-card:hover { border-color: var(--g200); box-shadow: var(--shadow-md); }
-        .entry-card:active { transform: scale(0.975); background: var(--g50); }
-        .entry-card .icon { font-size: 34px; width: 50px; height: 50px; text-align: center; flex-shrink: 0;
-            display: flex; align-items: center; justify-content: center;
-            background: var(--g50); border-radius: var(--radius); }
-        .entry-card .title { font-size: 17px; font-weight: 600; color: var(--g900); line-height: 1.3; }
-        .entry-card .sub { font-size: 12px; color: var(--g400); margin-top: 2px; }
-        .entry-card.primary {
-            background: linear-gradient(135deg, var(--p600), var(--p500));
-            color: #fff; border: none; box-shadow: var(--shadow-primary);
-            padding: 22px 24px;
-        }
-        .entry-card.primary .icon { background: rgba(255,255,255,0.15); color: #fff; }
-        .entry-card.primary .title { color: #fff; font-size: 18px; }
-        .entry-card.primary .sub { color: rgba(255,255,255,0.75); }
-        .entry-card.primary:hover { box-shadow: 0 6px 20px rgba(37,99,235,0.35); }
-        .home-scope {
-            width: 100%; max-width: 420px; margin: 0 auto 8px;
-            background: #fff; border-radius: var(--radius-lg);
-            border: 1px solid var(--g100); padding: 16px 16px 12px;
-            box-shadow: var(--shadow-sm);
-        }
-        .scope-title { font-size: 14px; font-weight: 600; color: var(--g700); margin-bottom: 10px; }
-        /* ---- Accordion ---- */
-        .scope-accordion { margin-bottom: 6px; border: 1px solid var(--g100); border-radius: 10px; overflow: hidden; }
-        .scope-header {
-            display: flex; align-items: center; gap: 8px; padding: 9px 14px;
-            cursor: pointer; user-select: none; background: #fafbfc;
-            font-size: 13px; font-weight: 700; color: var(--g700);
-            transition: background 0.15s;
-        }
-        .scope-header:hover { background: #eef2ff; }
-        .scope-header .arrow {
-            font-size: 10px; color: var(--g400); transition: transform 0.2s;
-            width: 16px; text-align: center; flex-shrink: 0;
-        }
-        .scope-accordion.open .scope-header .arrow { transform: rotate(90deg); }
-        .scope-header .count {
-            font-size: 11px; font-weight: 500; color: var(--g400); margin-left: auto;
-        }
-        .scope-body { display: none; padding: 4px 10px 10px; }
-        .scope-accordion.open .scope-body { display: block; }
-        .scope-example {
-            display: flex; align-items: center; gap: 8px; padding: 5px 8px;
-            border-radius: 6px; cursor: pointer; transition: background 0.15s;
-            font-size: 12px; color: var(--g600);
-        }
-        .scope-example:hover { background: var(--g50); }
-        .scope-example .ex-label { flex: 1; line-height: 1.4; }
-        .scope-example .ex-badge {
-            font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: var(--radius-full);
-            white-space: nowrap; flex-shrink: 0;
-        }
-        .ex-badge.sin  { color: #b45309; background: #fffbeb; border: 1px solid #fde68a; }
-        .ex-badge.cos  { color: #0d9488; background: #f0fdfa; border: 1px solid #99f6e4; }
-        .ex-badge.dist { color: #7c3aed; background: #faf5ff; border: 1px solid #ddd6fe; }
-        .ex-badge.vol  { color: #db2777; background: #fdf2f8; border: 1px solid #fbcfe8; }
-        .ex-badge.range{ color: #059669; background: #ecfdf5; border: 1px solid #a7f3d0; }
-        .scope-note { font-size: 12px; color: var(--g400); margin-top: 10px; text-align: center; }
-        .scope-toast {
-            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-            background: #1e293b; color: #fff; font-size: 13px; padding: 8px 20px;
-            border-radius: 20px; opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 999;
-        }
-        .scope-toast.show { opacity: 1; }
-        .home-footer { text-align: center; padding: 16px 0 36px; color: var(--g300); font-size: 11px; letter-spacing: 0.3px; }
-
-        /* ---- Capture ---- */
-        .capture-preview {
-            flex: 1; display: flex; align-items: center; justify-content: center;
-            background: #0f172a;
-            background-image: radial-gradient(ellipse at center, #1e293b 0%, #0f172a 70%);
-        }
-        .capture-preview img { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .capture-empty { text-align: center; color: var(--g400); }
-        .capture-empty .icon { font-size: 72px; margin-bottom: 16px; opacity: 0.7; }
-        .capture-empty p { font-size: 14px; color: var(--g500); }
-        .capture-actions {
-            display: flex; gap: 12px; padding: 16px 20px 20px;
-            background: rgba(15,23,42,0.95); backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-        }
-        .btn {
-            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-            padding: 14px 22px; border-radius: var(--radius); font-size: 15px; font-weight: 600;
-            font-family: inherit; cursor: pointer; border: none; transition: all 0.18s ease;
-            line-height: 1; letter-spacing: 0.1px;
-        }
-        .btn:active:not(:disabled) { transform: scale(0.965); }
-        .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; box-shadow: none; }
-        .btn-primary { flex: 1; background: var(--p500); color: #fff; box-shadow: 0 2px 8px rgba(59,130,246,0.25); }
-        .btn-primary:hover:not(:disabled) { background: var(--p600); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
-        .btn-outline {
-            background: rgba(255,255,255,0.1); color: #fff; flex-shrink: 0;
-            border: 1px solid rgba(255,255,255,0.15); min-width: 48px;
-        }
-        .btn-outline:hover:not(:disabled) { background: rgba(255,255,255,0.18); }
-        .btn-full { width: 100%; background: var(--p500); color: #fff; box-shadow: 0 2px 8px rgba(59,130,246,0.25); }
-        .btn-full:hover:not(:disabled) { background: var(--p600); box-shadow: 0 4px 14px rgba(37,99,235,0.35); }
-        .btn-white { background: #fff; color: var(--g900); border: 1px solid var(--g200); box-shadow: var(--shadow-sm); }
-        .btn-white:hover:not(:disabled) { border-color: var(--g300); box-shadow: var(--shadow); }
-
-        /* ---- Text Input ---- */
-        .confirm-body { flex: 1; padding: 20px 16px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; }
-        .confirm-body textarea {
-            width: 100%; flex: 1; min-height: 200px; border: 1.5px solid var(--g200); border-radius: var(--radius);
-            padding: 16px; font-size: 15px; font-family: inherit; line-height: 1.75; resize: none;
-            color: var(--g900); transition: all 0.2s ease; background: #fff;
-            box-shadow: var(--shadow-sm);
-        }
-        .confirm-body textarea:focus {
-            outline: none; border-color: var(--p400); box-shadow: 0 0 0 3px rgba(96,165,250,0.15);
-        }
-        .hint {
-            background: var(--p50); border-radius: var(--radius); padding: 14px 18px;
-            font-size: 13px; color: var(--p700); line-height: 1.6;
-            border-left: 3px solid var(--p300);
-        }
-        .status-msg {
-            text-align: center; padding: 12px 16px; font-size: 13px; font-weight: 500;
-            border-radius: var(--radius-full); display: none; margin: 0 16px;
-        }
-        .status-msg.show { display: block; animation: fadeIn 0.2s ease; }
-        .status-msg.loading { background: var(--p50); color: var(--p700); }
-        .status-msg.error { background: var(--red50); color: var(--red700); }
-        .status-msg.success { background: var(--green50); color: var(--green700); }
-
-        /* ---- History ---- */
-        .history-list { flex: 1; overflow-y: auto; padding: 12px 16px 24px; }
-        .history-item {
-            display: flex; align-items: center; gap: 14px;
-            background: #fff; border-radius: var(--radius-lg); border: 1px solid var(--g100);
-            padding: 14px 16px; margin-bottom: 10px; cursor: pointer;
-            transition: all 0.15s ease; box-shadow: var(--shadow-sm);
-        }
-        .history-item:hover { border-color: var(--g200); box-shadow: var(--shadow); }
-        .history-item:active { background: var(--g50); transform: scale(0.985); }
-        .history-thumb {
-            width: 52px; height: 52px; border-radius: var(--radius); background: var(--g50);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 24px; flex-shrink: 0; overflow: hidden;
-            border: 1px solid var(--g100);
-        }
-        .history-thumb img { width: 100%; height: 100%; object-fit: cover; }
-        .history-info { flex: 1; min-width: 0; }
-        .history-info .text {
-            font-size: 14px; font-weight: 500; line-height: 1.4; color: var(--g900);
-            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
-        .history-info .answer {
-            display: inline-block; font-size: 11px; font-weight: 600; color: var(--green700);
-            background: var(--green50); padding: 2px 10px; border-radius: var(--radius-full);
-            margin-top: 4px;
-        }
-        .history-info .time { font-size: 11px; color: var(--g400); margin-top: 3px; }
-        .history-delete {
-            width: 36px; height: 36px; border-radius: 50%; border: none;
-            background: transparent; color: var(--g300); font-size: 20px;
-            cursor: pointer; flex-shrink: 0; line-height: 1;
-            transition: all 0.15s ease; display: flex; align-items: center; justify-content: center;
-        }
-        .history-delete:hover { background: var(--red50); color: var(--red); }
-        .history-clear {
-            background: none; border: none; color: var(--g400); font-size: 13px; font-weight: 500;
-            cursor: pointer; padding: 6px 10px; flex-shrink: 0; border-radius: var(--radius);
-            transition: all 0.15s ease;
-        }
-        .history-clear:hover { background: var(--red50); color: var(--red); }
-        .empty-state { text-align: center; padding: 80px 20px; color: var(--g400); }
-        .empty-state .icon { font-size: 64px; margin-bottom: 16px; opacity: 0.6; }
-        .empty-state p { font-size: 15px; color: var(--g500); }
-
-        /* ---- Spinner ---- */
-        .spinner {
-            display: inline-block; border: 2.5px solid rgba(255,255,255,0.25);
-            border-top-color: #fff; border-radius: 50%;
-            width: 20px; height: 20px; animation: spin 0.6s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* ---- Responsive ---- */
-        @media (max-width: 480px) {
-            .home-header { padding: 36px 16px 18px; }
-            .home-header h1 { font-size: 28px; }
-            .home-header p { font-size: 13px; }
-            .entry-card { padding: 16px 18px; max-width: 100%; }
-            .entry-card.primary { padding: 18px 20px; }
-            .entry-card .icon { font-size: 30px; width: 44px; height: 44px; }
-            .confirm-body { padding: 16px 12px; }
-            .confirm-body textarea { min-height: 160px; font-size: 16px; }
-            .capture-actions { padding: 12px 14px 16px; }
-            .btn { padding: 13px 18px; font-size: 14px; }
-        }
-    </style>
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Math3D — 拍照搜题、AI 解析、生成交互式 3D 课件，专注立体几何解题学习。">
+    <meta property="og:title" content="Math3D — 立体几何交互解题">
+    <meta property="og:description" content="拍照搜题 · AI 解析 · 交互式 3D 课件">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="/icons/icon-512.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/icons/icon-192.png">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
+    <link rel="preconnect" href="https://unpkg.com" crossorigin>
+    <link rel="preconnect" href="https://registry.npmmirror.com" crossorigin>
+    <link rel="dns-prefetch" href="https://unpkg.com">
+    <link rel="dns-prefetch" href="https://registry.npmmirror.com">
+    <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+
+<!-- ═══════ SVG Icon Sprite ═══════ -->
+<svg style="display:none" aria-hidden="true">
+  <defs>
+    <symbol id="i-scanmath" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><circle cx="12" cy="13" r="4" stroke="currentColor" stroke-width="1.8" fill="none"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><path d="M21 15l-5-5L5 21" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8" fill="none"/><polyline points="12 6 12 12 16 14" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><circle cx="12" cy="7" r="4" stroke="currentColor" stroke-width="1.8" fill="none"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><polyline points="16 17 21 12 16 7" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><line x1="21" y1="12" x2="9" y2="12" stroke="currentColor" stroke-width="1.8"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="1.8" fill="none"/><line x1="21" y1="21" x2="16.65" y2="16.65" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M7 11V7a5 5 0 0110 0v4" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" stroke-width="1.8" fill="none"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8" fill="none"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><line x1="1" y1="1" x2="23" y2="23" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+    <symbol id="i-delete" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" stroke="currentColor" stroke-width="2" fill="none" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linejoin="round" stroke-linecap="round"/></symbol>
+    <symbol id="i-rotate" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linejoin="round"/></symbol>
+  </defs>
+</svg>
+
+<!-- ═══════ Auth Container ═══════ -->
+<div id="auth-container">
+    <div class="auth-branding">
+        <div class="logo"><svg><use href="#i-scanmath"/></svg></div>
+        <h1>Math3D</h1>
+        <p>拍照搜题 · AI 解析 · 交互式 3D 课件</p>
+    </div>
+    <div class="auth-card">
+        <div class="auth-tabs">
+            <button class="auth-tab active" data-auth-tab="login">登录</button>
+            <button class="auth-tab" data-auth-tab="register">注册</button>
+        </div>
+        <form id="auth-form-login" class="auth-form active" aria-label="登录" novalidate>
+            <div class="input-wrap"><input class="auth-input" type="tel" id="login-phone" placeholder="手机号" maxlength="11" autocomplete="tel" required></div>
+            <div class="input-wrap">
+                <input class="auth-input" type="password" id="login-password" placeholder="密码" autocomplete="current-password" required>
+                <button class="pwd-toggle" type="button" aria-label="显示密码" data-target="login-password"><svg><use href="#i-eye"/></svg></button>
+            </div>
+            <button class="forgot-pwd" type="button" id="btn-forgot-pwd">忘记密码？</button>
+            <div class="auth-error" id="login-error"></div>
+            <button class="btn btn-primary" id="btn-login" type="submit">登录</button>
+            <p class="auth-consent">登录即代表同意<a href="#" id="link-terms">《用户协议》</a>和<a href="#" id="link-privacy">《隐私政策》</a></p>
+        </form>
+        <form id="auth-form-register" class="auth-form" aria-label="注册" novalidate>
+            <div class="input-wrap"><input class="auth-input" type="tel" id="register-phone" placeholder="手机号" maxlength="11" autocomplete="tel" required></div>
+            <div class="input-wrap">
+                <input class="auth-input" type="password" id="register-password" placeholder="密码（至少6位）" autocomplete="new-password" required minlength="6">
+                <button class="pwd-toggle" type="button" aria-label="显示密码" data-target="register-password"><svg><use href="#i-eye"/></svg></button>
+            </div>
+            <input class="auth-input" type="password" id="register-password2" placeholder="确认密码" autocomplete="new-password" required>
+            <div class="auth-error" id="register-error"></div>
+            <button class="btn btn-primary" id="btn-register" type="submit">注册</button>
+            <p class="auth-consent">注册即代表同意<a href="#" id="link-terms-reg">《用户协议》</a>和<a href="#" id="link-privacy-reg">《隐私政策》</a></p>
+        </form>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════ App Container (Main Pages) ═══════════════════ -->
+<div class="app">
+<div id="app-container" style="display:none">
 
 <!-- ========== Home ========== -->
 <div class="page active safe-bottom" id="page-home">
     <div class="home-header">
-        <h1>Math3D</h1>
+        <div class="logo-row"><span class="logo-sm"><svg><use href="#i-scanmath"/></svg></span><h1>Math3D</h1></div>
         <p>拍照搜题 · AI 解析 · 交互式 3D 课件</p>
+        <div class="home-user">
+            <span class="user-phone" id="home-user-phone"></span>
+            <button class="logout-btn" id="home-logout">退出登录</button>
+        </div>
     </div>
-    <div class="home-cards">
-        <div class="entry-card primary" data-nav="capture">
-            <span class="icon">📷</span>
-            <div><div class="title">拍照搜题</div><div class="sub">拍摄题目照片，AI 自动识别</div></div>
+    <div class="home-body">
+        <button class="action-primary" data-nav="capture">
+            <span class="icon-box"><svg><use href="#i-camera"/></svg></span>
+            <div><div class="t">拍照搜题</div><div class="s">拍摄题目照片，AI 自动识别求解</div></div>
+        </button>
+        <div class="action-row">
+            <button class="action-card" data-nav="capture-album">
+                <span class="icon-box"><svg><use href="#i-image"/></svg></span>
+                <div class="t">从相册选择</div>
+                <div class="s">上传题目截图</div>
+            </button>
+            <button class="action-card" data-nav="text">
+                <span class="icon-box"><svg><use href="#i-edit"/></svg></span>
+                <div class="t">文字输入</div>
+                <div class="s">手动输入题目</div>
+            </button>
         </div>
-        <div class="entry-card" data-nav="capture-album">
-            <span class="icon">🖼️</span>
-            <div><div class="title">从相册选择</div><div class="sub">上传已有的题目截图</div></div>
+        <div class="action-row">
+            <button class="action-card" data-nav="history">
+                <span class="icon-box"><svg><use href="#i-history"/></svg></span>
+                <div class="t">历史记录</div>
+                <div class="s">已解答的题目</div>
+            </button>
+            <button class="action-card" data-nav="me">
+                <span class="icon-box"><svg><use href="#i-user"/></svg></span>
+                <div class="t">我的</div>
+                <div class="s">个人中心</div>
+            </button>
         </div>
-        <div class="entry-card" data-nav="text">
-            <span class="icon">⌨️</span>
-            <div><div class="title">文字输入</div><div class="sub">手动输入题目内容</div></div>
-        </div>
-        <div class="entry-card" data-nav="history">
-            <span class="icon">📋</span>
-            <div><div class="title">历史记录</div><div class="sub">查看已解答的题目</div></div>
+        <div class="action-row" id="entry-admin-card" style="display:none">
+            <button class="action-card" data-nav="admin">
+                <span class="icon-box"><svg><use href="#i-settings"/></svg></span>
+                <div class="t">用户管理</div>
+                <div class="s">管理员面板</div>
+            </button>
         </div>
     </div>
     <div class="home-scope">
-        <div class="scope-title">📐 支持题型（24 种 · 点击展开可试）</div>
-
+        <div class="section-title">📐 支持题型<span class="hint">点击展开可试 · 不限于以下题型</span></div>
         <div class="scope-accordion">
-            <div class="scope-header">
-                <span class="arrow">▶</span> 🟦 正方体 / 长方体 <span class="count">6 种</span>
-            </div>
+            <button type="button" class="scope-header" aria-expanded="false"><span class="arrow">▶</span> 正方体 / 长方体 <span class="count">6 种</span></button>
             <div class="scope-body">
-                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求直线 AC1 与平面 BDD1B1 所成角的正弦值。"><span class="ex-label">AC₁ 与平面 BDD₁B₁ 线面角</span><span class="ex-badge sin">正弦</span></div>
-                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求异面直线 A1C 与 AB 所成角的余弦值。"><span class="ex-label">A₁C 与 AB 异面直线夹角</span><span class="ex-badge cos">余弦</span></div>
-                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求点 A1 到平面 AB1C 的距离。"><span class="ex-label">点 A₁ 到平面 AB₁C 距离</span><span class="ex-badge dist">距离</span></div>
-                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，E,F 分别是棱 BC,CC1 的中点，P 是侧面 BCC1B1 内一点，若 A1P∥平面 AEF，求线段 A1P 长度的取值范围。"><span class="ex-label">动点取值范围</span><span class="ex-badge range">范围</span></div>
-                <div class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求二面角 A-BD-C1 的余弦值。"><span class="ex-label">二面角 A-BD-C₁</span><span class="ex-badge cos">余弦</span></div>
-                <div class="scope-example" data-example="长方体 ABCD-A1B1C1D1，AB=3，AD=2，AA1=2，求异面直线 A1C1 与 BD 所成角的余弦值。"><span class="ex-label">长方体 A₁C₁ 与 BD 异面</span><span class="ex-badge cos">余弦</span></div>
+                <button type="button" class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求直线 AC1 与平面 BDD1B1 所成角的正弦值。"><span class="ex-label">AC₁ 与平面 BDD₁B₁ 线面角</span><span class="badge blue">正弦</span></button>
+                <button type="button" class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求异面直线 A1C 与 AB 所成角的余弦值。"><span class="ex-label">A₁C 与 AB 异面直线夹角</span><span class="badge green">余弦</span></button>
+                <button type="button" class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求点 A1 到平面 AB1C 的距离。"><span class="ex-label">点 A₁ 到平面 AB₁C 距离</span><span class="badge orange">距离</span></button>
+                <button type="button" class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，E,F 分别是棱 BC,CC1 的中点，P 是侧面 BCC1B1 内一点，若 A1P∥平面 AEF，求线段 A1P 长度的取值范围。"><span class="ex-label">动点取值范围</span><span class="badge green">范围</span></button>
+                <button type="button" class="scope-example" data-example="正方体 ABCD-A1B1C1D1 棱长为 2，求二面角 A-BD-C1 的余弦值。"><span class="ex-label">二面角 A-BD-C₁</span><span class="badge green">余弦</span></button>
+                <button type="button" class="scope-example" data-example="长方体 ABCD-A1B1C1D1，AB=3，AD=2，AA1=2，求异面直线 A1C1 与 BD 所成角的余弦值。"><span class="ex-label">长方体 A₁C₁ 与 BD 异面</span><span class="badge green">余弦</span></button>
             </div>
         </div>
-
         <div class="scope-accordion">
-            <div class="scope-header">
-                <span class="arrow">▶</span> 🔺 正四面体 <span class="count">5 种</span>
-            </div>
+            <button type="button" class="scope-header" aria-expanded="false"><span class="arrow">▶</span> 正四面体 <span class="count">5 种</span></button>
             <div class="scope-body">
-                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求该正四面体的体积。"><span class="ex-label">体积</span><span class="ex-badge vol">体积</span></div>
-                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求直线 AB 与平面 BCD 所成角的正弦值。"><span class="ex-label">棱 AB 与对面 BCD 线面角</span><span class="ex-badge sin">正弦</span></div>
-                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求异面直线 AB 与 CD 所成角的余弦值。"><span class="ex-label">对棱 AB 与 CD 夹角</span><span class="ex-badge cos">余弦</span></div>
-                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求二面角 A-BC-D 的余弦值。"><span class="ex-label">二面角 A-BC-D</span><span class="ex-badge cos">余弦</span></div>
-                <div class="scope-example" data-example="正四面体 ABCD 棱长为 2，求点 A 到平面 BCD 的距离。"><span class="ex-label">点 A 到平面 BCD 距离</span><span class="ex-badge dist">距离</span></div>
+                <button type="button" class="scope-example" data-example="正四面体 ABCD 棱长为 2，求该正四面体的体积。"><span class="ex-label">体积</span><span class="badge orange">体积</span></button>
+                <button type="button" class="scope-example" data-example="正四面体 ABCD 棱长为 2，求直线 AB 与平面 BCD 所成角的正弦值。"><span class="ex-label">棱 AB 与对面 BCD 线面角</span><span class="badge blue">正弦</span></button>
+                <button type="button" class="scope-example" data-example="正四面体 ABCD 棱长为 2，求异面直线 AB 与 CD 所成角的余弦值。"><span class="ex-label">对棱 AB 与 CD 夹角</span><span class="badge green">余弦</span></button>
+                <button type="button" class="scope-example" data-example="正四面体 ABCD 棱长为 2，求二面角 A-BC-D 的余弦值。"><span class="ex-label">二面角 A-BC-D</span><span class="badge green">余弦</span></button>
+                <button type="button" class="scope-example" data-example="正四面体 ABCD 棱长为 2，求点 A 到平面 BCD 的距离。"><span class="ex-label">点 A 到平面 BCD 距离</span><span class="badge orange">距离</span></button>
             </div>
         </div>
-
         <div class="scope-accordion">
-            <div class="scope-header">
-                <span class="arrow">▶</span> 🔶 正四棱锥 <span class="count">5 种</span>
-            </div>
+            <button type="button" class="scope-header" aria-expanded="false"><span class="arrow">▶</span> 正四棱锥 <span class="count">5 种</span></button>
             <div class="scope-body">
-                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，E 为 PC 中点，求直线 BE 与平面 PAC 所成角的正弦值。"><span class="ex-label">BE 与平面 PAC 线面角</span><span class="ex-badge sin">正弦</span></div>
-                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求侧面 PAB 与底面 ABCD 所成二面角的余弦值。"><span class="ex-label">侧面 PAB 与底面二面角</span><span class="ex-badge cos">余弦</span></div>
-                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求异面直线 PC 与 AB 所成角的余弦值。"><span class="ex-label">PC 与 AB 异面直线</span><span class="ex-badge cos">余弦</span></div>
-                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求点 B 到平面 PAC 的距离。"><span class="ex-label">B 到平面 PAC 距离</span><span class="ex-badge dist">距离</span></div>
-                <div class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求该正四棱锥的体积。"><span class="ex-label">体积</span><span class="ex-badge vol">体积</span></div>
+                <button type="button" class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，E 为 PC 中点，求直线 BE 与平面 PAC 所成角的正弦值。"><span class="ex-label">BE 与平面 PAC 线面角</span><span class="badge blue">正弦</span></button>
+                <button type="button" class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求侧面 PAB 与底面 ABCD 所成二面角的余弦值。"><span class="ex-label">侧面 PAB 与底面二面角</span><span class="badge green">余弦</span></button>
+                <button type="button" class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求异面直线 PC 与 AB 所成角的余弦值。"><span class="ex-label">PC 与 AB 异面直线</span><span class="badge green">余弦</span></button>
+                <button type="button" class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求点 B 到平面 PAC 的距离。"><span class="ex-label">B 到平面 PAC 距离</span><span class="badge orange">距离</span></button>
+                <button type="button" class="scope-example" data-example="正四棱锥 P-ABCD，底面边长 2，高 1，求该正四棱锥的体积。"><span class="ex-label">体积</span><span class="badge orange">体积</span></button>
             </div>
         </div>
-
         <div class="scope-accordion">
-            <div class="scope-header">
-                <span class="arrow">▶</span> 🔷 正三棱柱 <span class="count">5 种</span>
-            </div>
+            <button type="button" class="scope-header" aria-expanded="false"><span class="arrow">▶</span> 正三棱柱 <span class="count">5 种</span></button>
             <div class="scope-body">
-                <div class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求该正三棱柱的体积。"><span class="ex-label">体积</span><span class="ex-badge vol">体积</span></div>
-                <div class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求直线 AB1 与底面 ABC 所成角的正弦值。"><span class="ex-label">AB₁ 与底面 ABC 线面角</span><span class="ex-badge sin">正弦</span></div>
-                <div class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求侧面 ABB1A1 与 BCC1B1 所成二面角的余弦值。"><span class="ex-label">相邻侧面二面角</span><span class="ex-badge cos">余弦</span></div>
-                <div class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求异面直线 AC1 与 BC 所成角的余弦值。"><span class="ex-label">AC₁ 与 BC 异面直线</span><span class="ex-badge cos">余弦</span></div>
-                <div class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求点 C1 到侧面 ABB1A1 的距离。"><span class="ex-label">C₁ 到侧面 ABB₁A₁ 距离</span><span class="ex-badge dist">距离</span></div>
+                <button type="button" class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求该正三棱柱的体积。"><span class="ex-label">体积</span><span class="badge orange">体积</span></button>
+                <button type="button" class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求直线 AB1 与底面 ABC 所成角的正弦值。"><span class="ex-label">AB₁ 与底面 ABC 线面角</span><span class="badge blue">正弦</span></button>
+                <button type="button" class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求侧面 ABB1A1 与 BCC1B1 所成二面角的余弦值。"><span class="ex-label">相邻侧面二面角</span><span class="badge green">余弦</span></button>
+                <button type="button" class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求异面直线 AC1 与 BC 所成角的余弦值。"><span class="ex-label">AC₁ 与 BC 异面直线</span><span class="badge green">余弦</span></button>
+                <button type="button" class="scope-example" data-example="正三棱柱 ABC-A1B1C1，底面等边三角形边长为 2，高为 3，求点 C1 到侧面 ABB1A1 的距离。"><span class="ex-label">C₁ 到侧面 ABB₁A₁ 距离</span><span class="badge orange">距离</span></button>
             </div>
         </div>
-
         <p class="scope-note">💡 不限于以上题型 — 输入任意几何题，AI 会尝试解答 ✨</p>
     </div>
     <div id="scope-toast" class="scope-toast">📋 已填入输入框，点击提交即可</div>
-    <div class="home-footer">Math3D v0.5.0</div>
+    <div class="home-footer" id="home-version">Math3D</div>
 </div>
 
 <!-- ========== Camera / Album Capture ========== -->
@@ -371,10 +192,10 @@
         <div class="nav-spacer"></div>
     </div>
     <div class="capture-preview" id="capture-preview">
-        <div class="capture-empty" id="capture-empty">
-            <div class="icon">📷</div>
-            <p>点击下方按钮拍摄题目照片</p>
-        </div>
+        <span class="vf-corner tl"></span><span class="vf-corner tr"></span>
+        <span class="vf-corner bl"></span><span class="vf-corner br"></span>
+        <span class="scan-line"></span>
+        <div class="capture-empty" id="capture-empty"><div class="icon">📷</div><p>点击下方按钮拍摄题目照片</p></div>
         <img id="capture-img" src="" alt="" style="display:none">
     </div>
     <div id="capture-status" class="status-msg"></div>
@@ -398,8 +219,33 @@
     </div>
     <div id="text-status" class="status-msg"></div>
     <div class="confirm-body">
+        <div class="sym-bar" aria-label="常用数学符号">
+            <button type="button">θ</button><button type="button">√</button><button type="button">π</button><button type="button">°</button>
+            <button type="button">∠</button><button type="button">△</button><button type="button">→</button><button type="button">⊥</button>
+            <button type="button">∥</button><button type="button">₁</button><button type="button">₂</button><button type="button">³</button>
+            <button type="button">₄</button><button type="button">′</button><button type="button">″</button>
+        </div>
         <textarea id="text-input" placeholder="请输入题目内容，例如：&#10;在正方体 ABCD-A1B1C1D1 中，棱长为 2，求直线 AB1 与平面 A1C1D 的夹角。"></textarea>
         <button class="btn btn-full" id="btn-text-submit">提交题目</button>
+    </div>
+</div>
+
+<!-- ========== AI 解析中 ========== -->
+<div class="page safe-bottom" id="page-solving">
+    <div class="nav-header">
+        <button class="nav-back" data-back>← 返回</button>
+        <h1>AI 解析中</h1>
+        <div class="nav-spacer"></div>
+    </div>
+    <div class="solving-body">
+        <div class="solve-visual"><svg><use href="#i-scanmath"/></svg></div>
+        <div class="solve-title" id="solve-title">正在解析题目…</div>
+        <div class="solve-progress"><div class="sp-fill"></div></div>
+        <div class="solving-steps" id="solving-steps">
+            <div class="ss done"><span class="ss-icon"><svg><use href="#i-check"/></svg></span>结构化解析<span class="ss-sub" id="ss-time">0.8s</span></div>
+            <div class="ss doing"><span class="ss-icon"><span class="spinner"></span></span>几何计算<span class="ss-sub">约 2–6s</span></div>
+            <div class="ss"><span class="ss-icon"><svg><use href="#i-scanmath"/></svg></span>生成 3D 交互课件</div>
+        </div>
     </div>
 </div>
 
@@ -410,365 +256,117 @@
         <h1>历史记录</h1>
         <button class="history-clear" id="btn-clear-history">清空</button>
     </div>
+    <div class="h-toolbar">
+        <div class="h-search"><svg><use href="#i-search"/></svg><input id="history-search" type="text" placeholder="搜索题目…"></div>
+        <div class="h-chips" id="history-chips">
+            <button class="chip active" data-filter="">全部</button>
+            <button class="chip" data-filter="立方体">立方体</button>
+            <button class="chip" data-filter="四面体">四面体</button>
+            <button class="chip" data-filter="棱锥">棱锥</button>
+            <button class="chip" data-filter="棱柱">棱柱</button>
+        </div>
+    </div>
     <div class="history-list" id="history-list">
-        <div class="empty-state" id="history-empty">
-            <div class="icon">📭</div>
-            <p>暂无记录</p>
+        <div class="h-empty" id="history-empty">
+            <div class="e-icon"><svg><use href="#i-history"/></svg></div>
+            <div class="e-t">暂无历史记录</div>
+            <div class="e-s">解答题目后会自动保存在这里</div>
+            <button class="btn btn-primary" id="h-empty-goto" style="max-width:220px;margin-top:var(--s-4);">去解题</button>
         </div>
     </div>
 </div>
 
+<!-- ========== Me (Profile) ========== -->
+<div class="page safe-bottom" id="page-me">
+    <div class="nav-header">
+        <button class="nav-back" data-back>← 返回</button>
+        <h1>我的</h1>
+        <div class="nav-spacer"></div>
+    </div>
+    <div class="profile">
+        <div class="avatar"><svg><use href="#i-user"/></svg></div>
+        <div>
+            <div class="name" id="me-name">Math3D 用户</div>
+            <div class="phone" id="me-phone"></div>
+        </div>
+    </div>
+    <div class="stats" id="me-stats">
+        <div class="stat"><div class="n" id="me-total">0</div><div class="l">解题总数</div></div>
+        <div class="stat"><div class="n" id="me-month">0</div><div class="l">本月解题</div></div>
+        <div class="stat"><div class="n" id="me-rate">—</div><div class="l">求解成功率</div></div>
+    </div>
+    <div class="menu">
+        <button class="m-item" data-nav="history"><svg class="lead"><use href="#i-history"/></svg>历史记录<span class="val"><svg><use href="#i-arrow-right"/></svg></span></button>
+        <button class="m-item danger" id="me-logout-btn"><svg class="lead"><use href="#i-logout"/></svg>退出登录</button>
+    </div>
+    <div class="version" id="me-version">Math3D</div>
+</div>
+
+<!-- ========== Admin ========== -->
+<div class="page safe-bottom" id="page-admin">
+    <div class="nav-header">
+        <button class="nav-back" data-back>← 返回</button>
+        <h1>用户管理</h1>
+        <div class="nav-spacer"></div>
+    </div>
+    <div style="padding:12px 16px 0;display:flex;gap:8px">
+        <input class="auth-input" type="tel" id="promote-phone" placeholder="输入手机号提升为管理员" maxlength="11" style="flex:1">
+        <button class="btn btn-primary" id="btn-promote" style="flex-shrink:0;padding:6px 16px;font-size:13px">提升</button>
+    </div>
+    <div class="history-list" id="admin-user-list">
+        <div class="empty-state" id="admin-empty"><div class="icon">👥</div><p>加载中...</p></div>
+    </div>
+</div>
+
+<!-- Admin: view user history -->
+<div class="page safe-bottom" id="page-admin-history">
+    <div class="nav-header">
+        <button class="nav-back" data-back-admin>← 返回</button>
+        <h1 id="admin-history-title">用户历史</h1>
+        <div class="nav-spacer"></div>
+    </div>
+    <div class="history-list" id="admin-history-list">
+        <div class="empty-state"><div class="icon">📭</div><p>暂无记录</p></div>
+    </div>
+</div>
+
+<!-- ═══════ Bottom TabBar (mobile) ═══════ -->
+<nav class="tabbar" id="tabbar">
+    <button class="tab active" data-tab="home"><svg><use href="#i-scanmath"/></svg>解题</button>
+    <button class="tab" data-tab="history"><svg><use href="#i-history"/></svg>历史</button>
+    <button class="tab" data-tab="me"><svg><use href="#i-user"/></svg>我的</button>
+</nav>
+
+</div><!-- /#app-container -->
+</div><!-- /.app -->
+
+<!-- Import toast (shared) -->
+<div id="import-toast" class="import-toast">
+    <span id="import-toast-msg"></span>
+    <button id="import-toast-yes">导入</button>
+    <button id="import-toast-no" style="background:var(--g400)">不用</button>
+</div>
+
+<script src="config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/app.js"></script>
+<script src="js/ocr.js"></script>
+<script src="js/solve.js"></script>
+<script src="js/history.js"></script>
+<script src="js/admin.js"></script>
 <script>
-// ===== Page Router =====
-const pages = {};
-document.querySelectorAll('.page').forEach(p => pages[p.id.replace('page-','')] = p);
-
-function navigate(name) {
-    if (window.location.hash === '#' + name) return; // prevent hashchange recursion
-    Object.values(pages).forEach(p => p.classList.remove('active'));
-    const target = pages[name];
-    if (target) target.classList.add('active');
-    window.location.hash = name;
-    window.scrollTo(0, 0);
-}
-
-// Back buttons
-document.querySelectorAll('[data-back]').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const activePage = document.querySelector('.page.active');
-        // Reset state based on which page we're leaving
-        if (activePage && activePage.id === 'page-capture') {
-            resetCapture('camera');
-        }
-        if (activePage && activePage.id === 'page-text') {
-            document.getElementById('text-input').value = '';
-            $textStatus.className = 'status-msg';
-        }
-        navigate('home');
-    });
-});
-
-// Home cards
-document.querySelectorAll('[data-nav]').forEach(card => {
-    card.addEventListener('click', () => {
-        const nav = card.dataset.nav;
-        if (nav === 'capture') { resetCapture('camera'); navigate('capture'); }
-        else if (nav === 'capture-album') { resetCapture('album'); navigate('capture'); }
-        else if (nav === 'text') {
-            // Clear stale OCR text when entering text page directly
-            document.getElementById('text-input').value = '';
-            $textStatus.className = 'status-msg';
-            navigate('text');
-        }
-        else navigate(nav);
-    });
-});
-
-// ===== Scope Accordion Toggle =====
-document.querySelectorAll('.scope-header').forEach(header => {
-    header.addEventListener('click', () => {
-        header.parentElement.classList.toggle('open');
-    });
-});
-
-// ===== Scope Example Clicks =====
-const $scopeToast = document.getElementById('scope-toast');
-let _scopeToastTimer = 0;
-document.querySelectorAll('.scope-example[data-example]').forEach(el => {
-    el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        document.getElementById('text-input').value = el.dataset.example;
-        $textStatus.className = 'status-msg';
-        navigate('text');
-        clearTimeout(_scopeToastTimer);
-        $scopeToast.classList.add('show');
-        _scopeToastTimer = setTimeout(() => $scopeToast.classList.remove('show'), 1800);
-    });
-});
-
-// ===== Capture =====
-const $captureEmpty = document.getElementById('capture-empty');
-const $captureImg = document.getElementById('capture-img');
-const $captureStatus = document.getElementById('capture-status');
-const $captureTitle = document.getElementById('capture-title');
-const $captureFile = document.getElementById('capture-file');
-const $albumFile = document.getElementById('album-file');
-
-const $actionsCamera = document.getElementById('capture-actions-camera');
-const $actionsAlbum = document.getElementById('capture-actions-album');
-
-function resetCapture(mode) {
-    $captureTitle.textContent = mode === 'album' ? '从相册选择' : '拍照搜题';
-    $captureImg.style.display = 'none';
-    $captureEmpty.style.display = '';
-    $captureStatus.className = 'status-msg';
-    $captureFile.value = '';
-    $albumFile.value = '';
-    // Toggle button groups
-    $actionsCamera.style.display = mode === 'album' ? 'none' : '';
-    $actionsAlbum.style.display = mode === 'album' ? '' : 'none';
-}
-
-let _captureObjUrl = null;
-function showCapturePreview(file) {
-    if (_captureObjUrl) URL.revokeObjectURL(_captureObjUrl);
-    _captureObjUrl = URL.createObjectURL(file);
-    $captureImg.src = _captureObjUrl;
-    $captureImg.style.display = '';
-    $captureEmpty.style.display = 'none';
-}
-
-function captureStatus(msg, type) {
-    $captureStatus.textContent = msg;
-    $captureStatus.className = 'status-msg ' + type + ' show';
-}
-
-document.getElementById('btn-capture-take').addEventListener('click', () => $captureFile.click());
-document.getElementById('btn-capture-album-btn').addEventListener('click', () => $albumFile.click());
-document.getElementById('btn-capture-album-full').addEventListener('click', () => $albumFile.click());
-
-// Compress image before upload: resize to max 1920px, convert to JPEG
-// Fixes: (1) HEIC→JPEG for iPhone photos, (2) reduces file size from MB→~200KB
-function compressImage(file) {
-    return new Promise((resolve, reject) => {
-        // If already a small JPEG, skip compression
-        if (file.type === 'image/jpeg' && file.size < 300 * 1024) {
-            resolve(file);
-            return;
-        }
-        const img = new Image();
-        const objUrl = URL.createObjectURL(file);
-        img.onload = () => {
-            URL.revokeObjectURL(objUrl);
-            const maxDim = 1920;
-            let w = img.width, h = img.height;
-            if (w > maxDim || h > maxDim) {
-                const scale = maxDim / Math.max(w, h);
-                w = Math.round(w * scale);
-                h = Math.round(h * scale);
-            }
-            const canvas = document.createElement('canvas');
-            canvas.width = w; canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, w, h);
-            canvas.toBlob(blob => {
-                if (blob) resolve(new File([blob], 'photo.jpg', { type: 'image/jpeg' }));
-                else reject(new Error('compress failed'));
-            }, 'image/jpeg', 0.85);
-        };
-        img.onerror = () => { URL.revokeObjectURL(objUrl); reject(new Error('image load failed')); };
-        img.src = objUrl;
-    });
-}
-
-async function handleCaptureFile(file) {
-    if (!file) return;
-    showCapturePreview(file);
-    captureStatus('正在压缩图片...', 'loading');
-
-    try {
-        // Compress before upload (convert HEIC → JPEG, resize large photos)
-        const compressed = await compressImage(file);
-        captureStatus('正在调用视觉 AI 识别...', 'loading');
-
-        const fd = new FormData(); fd.append('image', compressed, compressed.name);
-        const res = await fetch('/api/ocr', { method: 'POST', body: fd });
-        if (!res.ok) {
-            const errText = await res.text().catch(() => '');
-            throw new Error('OCR 请求失败 (' + res.status + ')' + (errText ? ': ' + errText.slice(0, 100) : ''));
-        }
-        const data = await res.json();
-
-        if (!data.success) {
-            captureStatus('识别失败：' + (data.error || '请确认 LLM 已配置'), 'error');
-            return;
-        }
-        const text = (data.text || '').trim();
-        if (!text) { captureStatus('未识别到文字，请重新拍照', 'error'); return; }
-
-        captureStatus('识别完成', 'success');
-        // Navigate to text page for user review & confirmation
-        document.getElementById('text-input').value = text;
-        $textStatus.textContent = '✅ 识别完成，请核对题目后提交';
-        $textStatus.className = 'status-msg success show';
-        setTimeout(() => navigate('text'), 500);
-    } catch (e) {
-        captureStatus('错误：' + (e.message || '请重试'), 'error');
-    }
-}
-
-$captureFile.addEventListener('change', e => handleCaptureFile(e.target.files[0]));
-$albumFile.addEventListener('change', e => handleCaptureFile(e.target.files[0]));
-
-// ===== Text Input =====
-const $textStatus = document.getElementById('text-status');
-
-document.getElementById('btn-text-submit').addEventListener('click', async () => {
-    const text = document.getElementById('text-input').value.trim();
-    if (!text) return;
-    $textStatus.textContent = '正在提交...'; $textStatus.className = 'status-msg loading show';
-    await submitAndGo(text, $textStatus);
-});
-
-// ===== Shared: submit & redirect =====
-async function submitAndGo(text, $statusEl) {
-    if (!text) return;
-    $statusEl.textContent = '正在解析计算...'; $statusEl.className = 'status-msg loading show';
-
-    try {
-        const res = await fetch('/api/solve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ problem: text }),
+    // Register Service Worker for PWA offline support
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+            navigator.serviceWorker.register('/sw.js').then(function(reg) {
+                console.log('SW registered:', reg.scope);
+            }).catch(function(err) {
+                console.warn('SW registration failed:', err);
+            });
         });
-        if (!res.ok) {
-            const errText = await res.text().catch(() => '');
-            throw new Error('求解请求失败 (' + res.status + ')' + (errText ? ': ' + errText.slice(0, 100) : ''));
-        }
-        const data = await res.json();
-        if (!data.success) throw new Error(data.error || '求解失败');
-
-        // Save to history
-        saveHistory(text, data.answer_latex, data.answer_value);
-
-        const url = URL.createObjectURL(new Blob([data.html], { type: 'text/html' }));
-        const win = window.open(url, '_blank');
-        // Revoke blob URL after the new tab has loaded
-        if (win) { setTimeout(() => URL.revokeObjectURL(url), 10000); }
-        else { $statusEl.textContent = '请允许弹出窗口以查看解题页'; $statusEl.className = 'status-msg error show'; }
-    } catch (e) {
-        $statusEl.textContent = '错误：' + e.message; $statusEl.className = 'status-msg error show';
     }
-}
-
-// ===== History =====
-const HISTORY_KEY = 'math3d_history';
-
-function loadHistory() {
-    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
-    catch { return []; }
-}
-
-function saveHistory(problem, answer_latex, answer_value) {
-    const items = loadHistory();
-    items.unshift({
-        id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
-        problem: problem.slice(0, 80),
-        answer_latex,
-        answer_value,
-        time: Date.now(),
-    });
-    // Keep max 50
-    if (items.length > 50) items.length = 50;
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
-}
-
-function formatTime(ts) {
-    const d = new Date(ts);
-    return d.getFullYear() + '-' +
-        String(d.getMonth()+1).padStart(2,'0') + '-' +
-        String(d.getDate()).padStart(2,'0') + ' ' +
-        String(d.getHours()).padStart(2,'0') + ':' +
-        String(d.getMinutes()).padStart(2,'0');
-}
-
-function renderHistory() {
-    const items = loadHistory();
-    const list = document.getElementById('history-list');
-    const empty = document.getElementById('history-empty');
-
-    if (items.length === 0) {
-        empty.style.display = '';
-        list.querySelectorAll('.history-item').forEach(el => el.remove());
-        return;
-    }
-    empty.style.display = 'none';
-
-    // Remove old items not in current list
-    list.querySelectorAll('.history-item').forEach(el => {
-        if (!items.find(i => i.id === el.dataset.id)) el.remove();
-    });
-
-    items.forEach(item => {
-        if (list.querySelector(`[data-id="${item.id}"]`)) return; // already rendered
-        const div = document.createElement('div');
-        div.className = 'history-item';
-        div.dataset.id = item.id;
-        div.innerHTML = `
-            <div class="history-thumb">📐</div>
-            <div class="history-info">
-                <div class="text">${escapeHtml(item.problem)}</div>
-                <div class="answer">答案：${escapeHtml(item.answer_latex || '')}</div>
-                <div class="time">${formatTime(item.time)}</div>
-            </div>
-            <button class="history-delete" data-id="${item.id}">×</button>
-        `;
-        div.addEventListener('click', (e) => {
-            // Don't navigate if clicking delete button
-            if (e.target.closest('.history-delete')) return;
-            document.getElementById('text-input').value = item.problem;
-            navigate('text');
-        });
-        list.insertBefore(div, list.firstChild);
-    });
-}
-
-function escapeHtml(s) {
-    const div = document.createElement('div');
-    div.textContent = s;
-    return div.innerHTML;
-}
-
-function deleteHistoryItem(id) {
-    const items = loadHistory().filter(i => i.id !== id);
-    localStorage.setItem(HISTORY_KEY, JSON.stringify(items));
-    renderHistory();
-}
-
-function clearHistory() {
-    if (confirm('确定要清除所有历史记录吗？')) {
-        localStorage.removeItem(HISTORY_KEY);
-        renderHistory();
-    }
-}
-
-// Delegate click for dynamic history items (delete buttons)
-document.getElementById('history-list').addEventListener('click', (e) => {
-    const btn = e.target.closest('.history-delete');
-    if (btn) {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
-        deleteHistoryItem(btn.dataset.id);
-    }
-});
-
-// Clear-history button
-document.getElementById('btn-clear-history').addEventListener('click', clearHistory);
-
-// ===== Init =====
-function init() {
-    const hash = window.location.hash.replace('#','');
-    if (hash && pages[hash]) navigate(hash);
-
-    // Browser back/forward support
-    window.addEventListener('hashchange', () => {
-        const name = window.location.hash.replace('#', '');
-        if (name && pages[name]) {
-            // Update page visibility without re-setting hash
-            Object.values(pages).forEach(p => p.classList.remove('active'));
-            if (pages[name]) pages[name].classList.add('active');
-            window.scrollTo(0, 0);
-        }
-    });
-
-    // Render history when shown
-    const historyObserver = new MutationObserver(() => {
-        if (pages.history.classList.contains('active')) renderHistory();
-    });
-    historyObserver.observe(pages.history, { attributes: true, attributeFilter: ['class'] });
-}
-
-init();
 </script>
 </body>
 </html>

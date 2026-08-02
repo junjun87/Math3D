@@ -22,17 +22,30 @@
 ```
 .
 ├── backend/
-│   ├── app.py               # FastAPI 服务（/api/solve + /api/ocr + 同源托管前端）
-│   ├── geometry_kernel.py   # sympy 精确计算核心 + 题型求解器
+│   ├── app.py               # FastAPI 服务（15 个 API 端点）
+│   ├── geometry_kernel.py   # sympy 精确计算核心 + 24 种题型求解器
 │   ├── solver_registry.py   # @register_solver 题型注册表
 │   ├── llm_parser.py        # 阿里云 OCR + DeepSeek 题面解析与规范化
 │   ├── bodies.py            # 几何体拓扑库（顶点 + 棱）
+│   ├── config.py            # Pydantic Settings 环境变量管理
+│   ├── database.py          # SQLModel + PostgreSQL 引擎
+│   ├── solution_cache.py    # TTL 内存缓存（解题数据）
 │   ├── template.html        # Three.js 数据驱动模板
+│   ├── auth/                # JWT 签发/解码 + bcrypt 密码哈希
+│   ├── models/              # SQLModel 表定义（user + history）
+│   ├── routers/             # API 路由（auth + history + admin）
 │   └── scripts/
-│       └── generate.py      # CLI：直接生成解题 HTML 文件
+│       ├── generate.py      # CLI：直接生成解题 HTML 文件
+│       └── create_admin.py  # 创建管理员用户
 ├── frontend/
-│   └── index.html           # 多页面 UI（拍照/相册/文字/历史）
-├── docker-compose.yml       # Docker Compose 一键部署
+│   ├── index.html           # 多页面 SPA（拍照/相册/文字/历史/管理）
+│   ├── solution.html        # 静态解题页（Three.js + MathJax）
+│   ├── config.js            # API_BASE_URL 配置
+│   ├── js/                  # 模块化 JS（app/auth/solve/ocr/history/admin）
+│   ├── css/style.css        # 全局样式
+│   └── icons/               # PWA 图标
+├── docker-compose.yml       # Docker Compose 三容器部署
+├── nginx.conf               # Nginx 反向代理 + 静态托管
 ├── .env.example             # 阿里云 OCR + LLM 配置模板
 ├── Dockerfile               # Docker 镜像构建
 ├── requirements.txt
@@ -66,9 +79,9 @@ python -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 
 ### 4. 打开前端
 
-**Docker 部署（推荐）：** 后端同源托管前端，访问 `http://localhost:8000` 即可。
+**Docker 部署（推荐）：** 三容器（nginx + app + db），nginx 在 80 端口反代 API 并托管前端，访问 `http://localhost` 即可。
 
-**本地开发：** 启动后端后访问 `http://localhost:8000`（FastAPI 已同源托管前端静态文件），或直接打开 `frontend/index.html`（浏览器需允许 `file://` 跨域请求）。
+**本地开发：** 启动后端后访问 `http://localhost:8000`（FastAPI 默认同源托管前端静态文件），或直接打开 `frontend/index.html`（浏览器需允许 `file://` 跨域请求）。
 
 ## Docker 部署
 

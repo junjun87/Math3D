@@ -1,5 +1,5 @@
-# Edulab MVP — 立体几何解题工具
-# 基于 Python FastAPI + Three.js 的交互式 3D 几何解题系统
+# Math3D — 立体几何解题工具
+# FastAPI + 前端静态文件 + PostgreSQL
 FROM python:3.12-slim
 
 WORKDIR /app
@@ -19,9 +19,8 @@ RUN sed -i 's/deb.debian.org/mirrors.tencentyun.com/g' /etc/apt/sources.list.d/d
 COPY requirements.txt .
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
 
-# 复制应用代码（保持 backend/frontend 相对路径结构）
+# 复制后端代码（前端由独立 nginx 容器托管）
 COPY backend/ ./backend/
-COPY frontend/ ./frontend/
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
@@ -29,5 +28,5 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 EXPOSE 8000
 
-# 启动服务（PYTHONPATH 已指向 /app/backend，直接使用 app:app）
+# 启动服务
 CMD ["python", "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
